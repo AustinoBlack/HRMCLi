@@ -12,7 +12,10 @@ SRC := \
 	src/log.c \
 	src/terminal.c\
 	src/tui.c\
-	src/ui.c
+	src/ui.c\
+	src/pane.c\
+	src/workspace.c\
+	src/menu.c
 
 OBJ := $(SRC:.c=.o)
 

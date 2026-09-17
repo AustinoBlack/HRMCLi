@@ -1,62 +1,29 @@
-#include <stdio.h>
-#include <string.h>
+#include <stddef.h>
 
+#include "hrmcli/menu.h"
+#include "hrmcli/pane.h"
 #include "hrmcli/terminal.h"
 #include "hrmcli/tui.h"
 #include "hrmcli/ui.h"
-/*
-static void draw_centered(
-    int row,
-    const char *text,
-    int terminal_width
-)
+#include "hrmcli/workspace.h"
+
+static const char *main_menu_items[] = {
+    "Dashboard",
+    "Nodes",
+    "Configuration",
+    "Logs",
+    "HRMCLi CLI",
+    "System",
+    "Quit"
+};
+
+static void draw_primary_pane(UiPane *pane)
 {
-    int length;
-    int col;
-
-    length = (int)strlen(text);
-
-    col = ((terminal_width - length) / 2) + 1;
-
-    if (col < 1) {
-        col = 1;
-    }
-
-    terminal_move_cursor(row, col);
-    terminal_write(text);
-}
-*/
-
-static void draw_screen(const char *last_event)
-{
-    UiRect screen;
     UiRect content;
-    UiRect left;
-    UiRect right;
-    UiRect test_box;
+    UiMenu *menu;
 
-    screen = ui_get_screen_rect();
-
-    if (
-        screen.width <= 0 ||
-        screen.height <= 0
-    ) {
-        return;
-    }
-
-    terminal_clear();
-
-    /*
-     * Outer application boundary.
-     */
-    ui_draw_box(screen);
-
-    /*
-     * Leave one cell between the application
-     * boundary and our content.
-     */
     content = ui_rect_inset(
-        screen,
+        pane->rect,
         2
     );
 
@@ -67,147 +34,189 @@ static void draw_screen(const char *last_event)
         return;
     }
 
-    /*
-     * Split the available content 40 / 60.
-     */
-    ui_split_vertical(
-        content,
-        40,
-        &left,
-        &right
-    );
+    menu = pane->userdata;
+
+    if (menu == NULL) {
+        return;
+    }
 
     /*
-     * Draw the two resulting regions.
+     * Give the menu the current pane dimensions.
+     * This keeps it responsive when the terminal resizes.
      */
-    ui_draw_box(left);
-    ui_draw_box(right);
+    ui_menu_set_rect(
+        menu,
+        content
+    );
+
+    ui_menu_draw(menu);
+}
+
+static void draw_secondary_pane(UiPane *pane)
+{
+    UiRect content;
+
+    content = ui_rect_inset(
+        pane->rect,
+        2
+    );
+
+    if (
+        content.width <= 0 ||
+        content.height <= 0
+    ) {
+        return;
+    }
 
     ui_draw_centered_text(
-        left.row + 1,
-        left.col + 1,
-        left.width - 2,
-        "PRIMARY"
+        content.row + 2,
+        content.col,
+        content.width,
+        "HRMCLi CLI"
     );
 
     ui_draw_centered_text(
-        right.row + 1,
-        right.col + 1,
-        right.width - 2,
-        "SECONDARY"
-    );
-
-    /*
-     * Test centering inside the left pane.
-     */
-    test_box = ui_rect_center(
-        ui_rect_inset(left, 2),
-        24,
-        7
-    );
-
-    ui_draw_box(test_box);
-
-    ui_draw_centered_text(
-        test_box.row + 2,
-        test_box.col + 1,
-        test_box.width - 2,
-        "HRMCLi"
-    );
-
-    ui_draw_centered_text(
-        test_box.row + 4,
-        test_box.col + 1,
-        test_box.width - 2,
-        last_event
+        content.row + 4,
+        content.col,
+        content.width,
+        "HRMCLi> _"
     );
 }
 
-static void describe_key(
-    int key,
-    char *buffer,
-    size_t buffer_size
+static void handle_primary_pane_key(
+    UiPane *pane,
+    int key
 )
 {
-    switch (key) {
-    case TERMINAL_KEY_UP:
-        snprintf(buffer, buffer_size, "Key: Up");
-        break;
+    UiMenu *menu;
+    int selected;
 
-    case TERMINAL_KEY_DOWN:
-        snprintf(buffer, buffer_size, "Key: Down");
-        break;
+    if (pane == NULL) {
+        return;
+    }
 
-    case TERMINAL_KEY_LEFT:
-        snprintf(buffer, buffer_size, "Key: Left");
-        break;
+    menu = pane->userdata;
 
-    case TERMINAL_KEY_RIGHT:
-        snprintf(buffer, buffer_size, "Key: Right");
-        break;
+    if (menu == NULL) {
+        return;
+    }
 
-    case TERMINAL_KEY_ENTER:
-        snprintf(buffer, buffer_size, "Key: Enter");
-        break;
+    selected = ui_menu_handle_key(
+        menu,
+        key
+    );
 
-    case TERMINAL_KEY_ESCAPE:
-        snprintf(buffer, buffer_size, "Key: Escape");
-        break;
-
-    case TERMINAL_KEY_BACKSPACE:
-        snprintf(buffer, buffer_size, "Key: Backspace");
-        break;
-
-    case TERMINAL_KEY_TAB:
-        snprintf(buffer, buffer_size, "Key: Tab");
-        break;
-
-    case TERMINAL_KEY_DELETE:
-        snprintf(buffer, buffer_size, "Key: Delete");
-        break;
-
-    case TERMINAL_KEY_HOME:
-        snprintf(buffer, buffer_size, "Key: Home");
-        break;
-
-    case TERMINAL_KEY_END:
-        snprintf(buffer, buffer_size, "Key: End");
-        break;
-
-    default:
-        if (key >= 32 && key <= 126) {
-            snprintf(
-                buffer,
-                buffer_size,
-                "Character: '%c'",
-                key
-            );
-        } else {
-            snprintf(
-                buffer,
-                buffer_size,
-                "Key code: %d",
-                key
-            );
-        }
-
-        break;
+    /*
+     * We are only testing selection for now.
+     * Actual screen navigation comes next.
+     */
+    if (selected != UI_MENU_NO_SELECTION) {
+        /*
+         * Temporary behavior.
+         */
     }
 }
 
+static void draw_screen(
+    UiWorkspace *workspace
+)
+{
+    terminal_clear();
+
+    ui_workspace_draw(
+        workspace
+    );
+}
+
+
 int tui_run(void)
 {
+    UiRect empty_rect = {0};
+    UiRect screen;
+    UiRect content;
+
+    UiPane primary;
+    UiPane secondary;
+
+    UiWorkspace workspace;
+
+    UiMenu main_menu;
+
     int key;
     int running = 1;
 
-    char last_key[128] = "Press a key";
-
+    /*
+     * Initialize the terminal backend.
+     */
     if (terminal_init() != 0) {
         return 1;
     }
 
-    draw_screen(last_key);
+    /*
+     * Create the two panes.
+     *
+     * They begin with empty rectangles because
+     * UiWorkspace will assign their real geometry.
+     */
+    ui_pane_init(
+        &primary,
+        empty_rect,
+        "NODE INFO"
+    );
 
+    ui_pane_init(
+        &secondary,
+        empty_rect,
+        "HRMCLI CLI"
+    );
+
+    ui_menu_init(
+        &main_menu,
+        empty_rect,
+        main_menu_items,
+        7
+    );
+
+    /*
+     * Assign the content-drawing callbacks.
+     */
+    primary.userdata = &main_menu;
+    primary.draw = draw_primary_pane;
+    primary.handle_key = handle_primary_pane_key;
+
+    secondary.draw = draw_secondary_pane;
+
+    /*
+     * Determine the initial area available
+     * to the workspace.
+     */
+    screen = ui_get_screen_rect();
+
+    content = ui_rect_inset(
+        screen,
+        1
+    );
+
+    /*
+     * Initialize the workspace.
+     *
+     * The primary pane is visible by default.
+     * The secondary pane starts hidden.
+     */
+    ui_workspace_init(
+        &workspace,
+        content,
+        &primary,
+        &secondary
+    );
+
+    draw_screen(
+        &workspace
+    );
+
+    /*
+     * Main TUI event loop.
+     */
     while (running) {
         key = terminal_read_key();
 
@@ -216,20 +225,50 @@ int tui_run(void)
         }
 
         switch (key) {
+        /*
+         * Recalculate the workspace whenever
+         * the terminal size changes.
+         */
         case TERMINAL_KEY_RESIZE:
-            snprintf(
-                last_key,
-                sizeof(last_key),
-                "Terminal resized"
+            screen = ui_get_screen_rect();
+
+            content = ui_rect_inset(
+                screen,
+                1
             );
 
-            draw_screen(last_key);
+            ui_workspace_set_rect(
+                &workspace,
+                content
+            );
+
+            draw_screen(
+                &workspace
+            );
+
             continue;
 
+        /*
+         * Tab switches focus between panes.
+         *
+         * If split view is not active,
+         * UiWorkspace simply ignores this.
+         */
+        case TERMINAL_KEY_TAB:
+            ui_workspace_toggle_focus(
+                &workspace
+            );
+
+            draw_screen(
+                &workspace
+            );
+
+            continue;
+
+        /*
+         * Normal termination paths.
+         */
         case TERMINAL_KEY_TERMINATE:
-            running = 0;
-            continue;
-
         case TERMINAL_KEY_CTRL_C:
             running = 0;
             continue;
@@ -238,20 +277,49 @@ int tui_run(void)
             break;
         }
 
-        if (key == 'q' || key == 'Q') {
+        if (
+            key == 's' ||
+            key == 'S'
+        ) {
+            ui_workspace_toggle_split(
+                &workspace
+            );
+
+            draw_screen(
+                &workspace
+            );
+
+            continue;
+        }
+
+        /*
+         * Quit HRMCLi.
+         */
+        if (
+            key == 'q' ||
+            key == 'Q'
+        ) {
             running = 0;
             continue;
         }
 
-        describe_key(
-            key,
-            last_key,
-            sizeof(last_key)
+        /*
+         * All other input is passed to the
+         * currently focused pane.
+         */
+        ui_workspace_handle_key(
+            &workspace,
+            key
         );
 
-        draw_screen(last_key);
+        draw_screen(
+            &workspace
+        );
     }
 
+    /*
+     * Restore the user's terminal before exiting.
+     */
     terminal_clear();
     terminal_move_cursor(1, 1);
     terminal_shutdown();
