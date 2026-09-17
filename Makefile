@@ -9,6 +9,7 @@ SRC := \
 	src/app.c \
 	src/config.c \
 	src/log.c \
+	src/terminal.c\
 	src/tui.c
 
 OBJ := $(SRC:.c=.o)
