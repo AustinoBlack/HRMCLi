@@ -41,4 +41,6 @@ void terminal_write(const char *text);
 
 int terminal_read_key(void);
 
+void terminal_set_reverse(int enabled);
+
 #endif

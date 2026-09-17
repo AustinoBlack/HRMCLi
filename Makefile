@@ -11,7 +11,8 @@ SRC := \
 	src/config.c \
 	src/log.c \
 	src/terminal.c\
-	src/tui.c
+	src/tui.c\
+	src/ui.c
 
 OBJ := $(SRC:.c=.o)
 

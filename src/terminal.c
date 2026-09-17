@@ -317,6 +317,14 @@ failure:
     return -1;
 }
 
+void terminal_set_reverse(int enabled)
+{
+    if (enabled) {
+        terminal_write("\x1b[7m");
+    } else {
+        terminal_write("\x1b[27m");
+    }
+}
 
 void terminal_shutdown(void)
 {

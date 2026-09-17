@@ -3,7 +3,8 @@
 
 #include "hrmcli/terminal.h"
 #include "hrmcli/tui.h"
-
+#include "hrmcli/ui.h"
+/*
 static void draw_centered(
     int row,
     const char *text,
@@ -24,54 +25,101 @@ static void draw_centered(
     terminal_move_cursor(row, col);
     terminal_write(text);
 }
+*/
 
 static void draw_screen(const char *last_event)
 {
-    TerminalSize size;
-    char dimensions[64];
+    UiRect screen;
+    UiRect content;
+    UiRect left;
+    UiRect right;
+    UiRect test_box;
 
-    if (terminal_get_size(&size) != 0) {
+    screen = ui_get_screen_rect();
+
+    if (
+        screen.width <= 0 ||
+        screen.height <= 0
+    ) {
         return;
     }
 
-    snprintf(
-        dimensions,
-        sizeof(dimensions),
-        "Terminal size: %d rows x %d columns",
-        size.rows,
-        size.cols
-    );
-
     terminal_clear();
 
-    draw_centered(
-        size.rows / 2 - 3,
-        "HRMCLi",
-        size.cols
+    /*
+     * Outer application boundary.
+     */
+    ui_draw_box(screen);
+
+    /*
+     * Leave one cell between the application
+     * boundary and our content.
+     */
+    content = ui_rect_inset(
+        screen,
+        2
     );
 
-    draw_centered(
-        size.rows / 2 - 1,
-        dimensions,
-        size.cols
+    if (
+        content.width <= 0 ||
+        content.height <= 0
+    ) {
+        return;
+    }
+
+    /*
+     * Split the available content 40 / 60.
+     */
+    ui_split_vertical(
+        content,
+        40,
+        &left,
+        &right
     );
 
-    draw_centered(
-        size.rows / 2 + 1,
-        last_event,
-        size.cols
+    /*
+     * Draw the two resulting regions.
+     */
+    ui_draw_box(left);
+    ui_draw_box(right);
+
+    ui_draw_centered_text(
+        left.row + 1,
+        left.col + 1,
+        left.width - 2,
+        "PRIMARY"
     );
 
-    draw_centered(
-        size.rows / 2 + 3,
-        "Resize the terminal to test SIGWINCH",
-        size.cols
+    ui_draw_centered_text(
+        right.row + 1,
+        right.col + 1,
+        right.width - 2,
+        "SECONDARY"
     );
 
-    draw_centered(
-        size.rows / 2 + 5,
-        "Press q or Ctrl+C to quit",
-        size.cols
+    /*
+     * Test centering inside the left pane.
+     */
+    test_box = ui_rect_center(
+        ui_rect_inset(left, 2),
+        24,
+        7
+    );
+
+    ui_draw_box(test_box);
+
+    ui_draw_centered_text(
+        test_box.row + 2,
+        test_box.col + 1,
+        test_box.width - 2,
+        "HRMCLi"
+    );
+
+    ui_draw_centered_text(
+        test_box.row + 4,
+        test_box.col + 1,
+        test_box.width - 2,
+        last_event
     );
 }
 
