@@ -7,6 +7,25 @@
 #include "hrmcli/ui.h"
 #include "hrmcli/workspace.h"
 
+
+typedef enum {
+    SCREEN_MAIN_MENU,
+    SCREEN_DASHBOARD,
+    SCREEN_NODES,
+    SCREEN_CONFIGURATION,
+    SCREEN_LOGS,
+    SCREEN_CLI,
+    SCREEN_SYSTEM
+} TuiScreen;
+
+
+typedef struct {
+    TuiScreen current_screen;
+    UiMenu main_menu;
+    int quit_requested;
+} TuiState;
+
+
 static const char *main_menu_items[] = {
     "Dashboard",
     "Nodes",
@@ -17,10 +36,64 @@ static const char *main_menu_items[] = {
     "Quit"
 };
 
-static void draw_primary_pane(UiPane *pane)
+
+#define MAIN_MENU_COUNT \
+    ((int)(sizeof(main_menu_items) / sizeof(main_menu_items[0])))
+
+
+static void set_screen(
+    UiPane *pane,
+    TuiState *state,
+    TuiScreen screen
+)
+{
+    if (
+        pane == NULL ||
+        state == NULL
+    ) {
+        return;
+    }
+
+    state->current_screen = screen;
+
+    switch (screen) {
+    case SCREEN_MAIN_MENU:
+        pane->title = "HRMCLI";
+        break;
+
+    case SCREEN_DASHBOARD:
+        pane->title = "DASHBOARD";
+        break;
+
+    case SCREEN_NODES:
+        pane->title = "NODES";
+        break;
+
+    case SCREEN_CONFIGURATION:
+        pane->title = "CONFIGURATION";
+        break;
+
+    case SCREEN_LOGS:
+        pane->title = "LOGS";
+        break;
+
+    case SCREEN_CLI:
+        pane->title = "HRMCLI CLI";
+        break;
+
+    case SCREEN_SYSTEM:
+        pane->title = "SYSTEM";
+        break;
+    }
+}
+
+
+static void draw_placeholder_screen(
+    UiPane *pane,
+    const char *heading
+)
 {
     UiRect content;
-    UiMenu *menu;
 
     content = ui_rect_inset(
         pane->rect,
@@ -34,25 +107,171 @@ static void draw_primary_pane(UiPane *pane)
         return;
     }
 
-    menu = pane->userdata;
+    ui_draw_centered_text(
+        content.row + 2,
+        content.col,
+        content.width,
+        heading
+    );
 
-    if (menu == NULL) {
+    ui_draw_centered_text(
+        content.row + 4,
+        content.col,
+        content.width,
+        "This screen is not implemented yet."
+    );
+
+    ui_draw_centered_text(
+        content.row + 6,
+        content.col,
+        content.width,
+        "Press Esc to return."
+    );
+}
+
+
+static void draw_nodes_screen(
+    UiPane *pane
+)
+{
+    UiRect content;
+
+    content = ui_rect_inset(
+        pane->rect,
+        2
+    );
+
+    if (
+        content.width <= 0 ||
+        content.height <= 0
+    ) {
         return;
     }
 
-    /*
-     * Give the menu the current pane dimensions.
-     * This keeps it responsive when the terminal resizes.
-     */
+    ui_draw_centered_text(
+        content.row + 2,
+        content.col,
+        content.width,
+        "Managed Nodes"
+    );
+
+    ui_draw_centered_text(
+        content.row + 4,
+        content.col,
+        content.width,
+        "No nodes configured."
+    );
+
+    ui_draw_centered_text(
+        content.row + 6,
+        content.col,
+        content.width,
+        "Press Esc to return."
+    );
+}
+
+
+static void draw_main_menu(
+    UiPane *pane,
+    TuiState *state
+)
+{
+    UiRect content;
+
+    content = ui_rect_inset(
+        pane->rect,
+        2
+    );
+
+    if (
+        content.width <= 0 ||
+        content.height <= 0
+    ) {
+        return;
+    }
+
     ui_menu_set_rect(
-        menu,
+        &state->main_menu,
         content
     );
 
-    ui_menu_draw(menu);
+    ui_menu_draw(
+        &state->main_menu
+    );
 }
 
-static void draw_secondary_pane(UiPane *pane)
+
+static void draw_primary_pane(
+    UiPane *pane
+)
+{
+    TuiState *state;
+
+    if (pane == NULL) {
+        return;
+    }
+
+    state = pane->userdata;
+
+    if (state == NULL) {
+        return;
+    }
+
+    switch (state->current_screen) {
+    case SCREEN_MAIN_MENU:
+        draw_main_menu(
+            pane,
+            state
+        );
+        break;
+
+    case SCREEN_DASHBOARD:
+        draw_placeholder_screen(
+            pane,
+            "Dashboard"
+        );
+        break;
+
+    case SCREEN_NODES:
+        draw_nodes_screen(
+            pane
+        );
+        break;
+
+    case SCREEN_CONFIGURATION:
+        draw_placeholder_screen(
+            pane,
+            "Configuration"
+        );
+        break;
+
+    case SCREEN_LOGS:
+        draw_placeholder_screen(
+            pane,
+            "Logs"
+        );
+        break;
+
+    case SCREEN_CLI:
+        draw_placeholder_screen(
+            pane,
+            "HRMCLi Command Line"
+        );
+        break;
+
+    case SCREEN_SYSTEM:
+        draw_placeholder_screen(
+            pane,
+            "System"
+        );
+        break;
+    }
+}
+
+
+static void draw_secondary_pane(
+    UiPane *pane
+)
 {
     UiRect content;
 
@@ -83,39 +302,118 @@ static void draw_secondary_pane(UiPane *pane)
     );
 }
 
+
+static void handle_main_menu_selection(
+    UiPane *pane,
+    TuiState *state,
+    int selected
+)
+{
+    switch (selected) {
+    case 0:
+        set_screen(
+            pane,
+            state,
+            SCREEN_DASHBOARD
+        );
+        break;
+
+    case 1:
+        set_screen(
+            pane,
+            state,
+            SCREEN_NODES
+        );
+        break;
+
+    case 2:
+        set_screen(
+            pane,
+            state,
+            SCREEN_CONFIGURATION
+        );
+        break;
+
+    case 3:
+        set_screen(
+            pane,
+            state,
+            SCREEN_LOGS
+        );
+        break;
+
+    case 4:
+        set_screen(
+            pane,
+            state,
+            SCREEN_CLI
+        );
+        break;
+
+    case 5:
+        set_screen(
+            pane,
+            state,
+            SCREEN_SYSTEM
+        );
+        break;
+
+    case 6:
+        state->quit_requested = 1;
+        break;
+
+    default:
+        break;
+    }
+}
+
+
 static void handle_primary_pane_key(
     UiPane *pane,
     int key
 )
 {
-    UiMenu *menu;
+    TuiState *state;
     int selected;
 
     if (pane == NULL) {
         return;
     }
 
-    menu = pane->userdata;
+    state = pane->userdata;
 
-    if (menu == NULL) {
+    if (state == NULL) {
+        return;
+    }
+
+    /*
+     * Currently the main menu is the only
+     * primary screen with local key handling.
+     */
+    if (
+        state->current_screen !=
+        SCREEN_MAIN_MENU
+    ) {
         return;
     }
 
     selected = ui_menu_handle_key(
-        menu,
+        &state->main_menu,
         key
     );
 
-    /*
-     * We are only testing selection for now.
-     * Actual screen navigation comes next.
-     */
-    if (selected != UI_MENU_NO_SELECTION) {
-        /*
-         * Temporary behavior.
-         */
+    if (
+        selected !=
+        UI_MENU_NO_SELECTION
+    ) {
+        handle_main_menu_selection(
+            pane,
+            state,
+            selected
+        );
     }
 }
+
 
 static void draw_screen(
     UiWorkspace *workspace
@@ -140,28 +438,37 @@ int tui_run(void)
 
     UiWorkspace workspace;
 
-    UiMenu main_menu;
+    TuiState state;
 
     int key;
     int running = 1;
 
-    /*
-     * Initialize the terminal backend.
-     */
     if (terminal_init() != 0) {
         return 1;
     }
 
     /*
-     * Create the two panes.
-     *
-     * They begin with empty rectangles because
-     * UiWorkspace will assign their real geometry.
+     * Initialize application TUI state.
+     */
+    state.current_screen =
+        SCREEN_MAIN_MENU;
+
+    state.quit_requested = 0;
+
+    ui_menu_init(
+        &state.main_menu,
+        empty_rect,
+        main_menu_items,
+        MAIN_MENU_COUNT
+    );
+
+    /*
+     * Initialize primary and secondary panes.
      */
     ui_pane_init(
         &primary,
         empty_rect,
-        "NODE INFO"
+        "HRMCLI"
     );
 
     ui_pane_init(
@@ -170,25 +477,16 @@ int tui_run(void)
         "HRMCLI CLI"
     );
 
-    ui_menu_init(
-        &main_menu,
-        empty_rect,
-        main_menu_items,
-        7
-    );
-
-    /*
-     * Assign the content-drawing callbacks.
-     */
-    primary.userdata = &main_menu;
+    primary.userdata = &state;
     primary.draw = draw_primary_pane;
-    primary.handle_key = handle_primary_pane_key;
+    primary.handle_key =
+        handle_primary_pane_key;
 
-    secondary.draw = draw_secondary_pane;
+    secondary.draw =
+        draw_secondary_pane;
 
     /*
-     * Determine the initial area available
-     * to the workspace.
+     * Determine initial workspace dimensions.
      */
     screen = ui_get_screen_rect();
 
@@ -197,12 +495,6 @@ int tui_run(void)
         1
     );
 
-    /*
-     * Initialize the workspace.
-     *
-     * The primary pane is visible by default.
-     * The secondary pane starts hidden.
-     */
     ui_workspace_init(
         &workspace,
         content,
@@ -215,7 +507,7 @@ int tui_run(void)
     );
 
     /*
-     * Main TUI event loop.
+     * Main event loop.
      */
     while (running) {
         key = terminal_read_key();
@@ -225,17 +517,15 @@ int tui_run(void)
         }
 
         switch (key) {
-        /*
-         * Recalculate the workspace whenever
-         * the terminal size changes.
-         */
         case TERMINAL_KEY_RESIZE:
-            screen = ui_get_screen_rect();
+            screen =
+                ui_get_screen_rect();
 
-            content = ui_rect_inset(
-                screen,
-                1
-            );
+            content =
+                ui_rect_inset(
+                    screen,
+                    1
+                );
 
             ui_workspace_set_rect(
                 &workspace,
@@ -248,12 +538,6 @@ int tui_run(void)
 
             continue;
 
-        /*
-         * Tab switches focus between panes.
-         *
-         * If split view is not active,
-         * UiWorkspace simply ignores this.
-         */
         case TERMINAL_KEY_TAB:
             ui_workspace_toggle_focus(
                 &workspace
@@ -265,9 +549,28 @@ int tui_run(void)
 
             continue;
 
-        /*
-         * Normal termination paths.
-         */
+        case TERMINAL_KEY_ESCAPE:
+            /*
+             * Esc returns to the main menu
+             * from any primary screen.
+             */
+            if (
+                state.current_screen !=
+                SCREEN_MAIN_MENU
+            ) {
+                set_screen(
+                    &primary,
+                    &state,
+                    SCREEN_MAIN_MENU
+                );
+
+                draw_screen(
+                    &workspace
+                );
+            }
+
+            continue;
+
         case TERMINAL_KEY_TERMINATE:
         case TERMINAL_KEY_CTRL_C:
             running = 0;
@@ -277,6 +580,9 @@ int tui_run(void)
             break;
         }
 
+        /*
+         * Temporary split-view shortcut.
+         */
         if (
             key == 's' ||
             key == 'S'
@@ -293,7 +599,7 @@ int tui_run(void)
         }
 
         /*
-         * Quit HRMCLi.
+         * Global quit shortcut.
          */
         if (
             key == 'q' ||
@@ -304,22 +610,24 @@ int tui_run(void)
         }
 
         /*
-         * All other input is passed to the
-         * currently focused pane.
+         * Forward input to whichever pane
+         * currently owns focus.
          */
         ui_workspace_handle_key(
             &workspace,
             key
         );
 
+        if (state.quit_requested) {
+            running = 0;
+            continue;
+        }
+
         draw_screen(
             &workspace
         );
     }
 
-    /*
-     * Restore the user's terminal before exiting.
-     */
     terminal_clear();
     terminal_move_cursor(1, 1);
     terminal_shutdown();
