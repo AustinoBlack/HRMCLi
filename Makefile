@@ -1,6 +1,7 @@
 CC := gcc
 
-CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -Iinclude
+CPPFLAGS := -D_POSIX_C_SOURCE=200809L -Iinclude
+CFLAGS := -std=c11 -Wall -Wextra -Wpedantic
 
 TARGET := hrmcli
 
@@ -22,7 +23,7 @@ $(TARGET): $(OBJ)
 	$(CC) $(OBJ) -o $(TARGET)
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJ) $(TARGET)

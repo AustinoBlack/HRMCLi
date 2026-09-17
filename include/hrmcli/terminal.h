@@ -22,13 +22,16 @@ typedef enum {
     TERMINAL_KEY_DELETE,
     TERMINAL_KEY_HOME,
     TERMINAL_KEY_END,
-    TERMINAL_KEY_CTRL_C
+    TERMINAL_KEY_CTRL_C,
+    TERMINAL_KEY_RESIZE,
+    TERMINAL_KEY_TERMINATE
 } TerminalKey;
 
 int terminal_init(void);
 void terminal_shutdown(void);
 
 int terminal_get_size(TerminalSize *size);
+int terminal_was_resized(void);
 
 void terminal_clear(void);
 void terminal_move_cursor(int row, int col);

@@ -25,13 +25,22 @@ static void draw_centered(
     terminal_write(text);
 }
 
-static void draw_screen(const char *last_key)
+static void draw_screen(const char *last_event)
 {
     TerminalSize size;
+    char dimensions[64];
 
     if (terminal_get_size(&size) != 0) {
         return;
     }
+
+    snprintf(
+        dimensions,
+        sizeof(dimensions),
+        "Terminal size: %d rows x %d columns",
+        size.rows,
+        size.cols
+    );
 
     terminal_clear();
 
@@ -43,18 +52,24 @@ static void draw_screen(const char *last_key)
 
     draw_centered(
         size.rows / 2 - 1,
-        "Terminal input test",
+        dimensions,
         size.cols
     );
 
     draw_centered(
         size.rows / 2 + 1,
-        last_key,
+        last_event,
         size.cols
     );
 
     draw_centered(
         size.rows / 2 + 3,
+        "Resize the terminal to test SIGWINCH",
+        size.cols
+    );
+
+    draw_centered(
+        size.rows / 2 + 5,
         "Press q or Ctrl+C to quit",
         size.cols
     );
@@ -152,11 +167,30 @@ int tui_run(void)
             break;
         }
 
-        if (
-            key == 'q' ||
-            key == 'Q' ||
-            key == TERMINAL_KEY_CTRL_C
-        ) {
+        switch (key) {
+        case TERMINAL_KEY_RESIZE:
+            snprintf(
+                last_key,
+                sizeof(last_key),
+                "Terminal resized"
+            );
+
+            draw_screen(last_key);
+            continue;
+
+        case TERMINAL_KEY_TERMINATE:
+            running = 0;
+            continue;
+
+        case TERMINAL_KEY_CTRL_C:
+            running = 0;
+            continue;
+
+        default:
+            break;
+        }
+
+        if (key == 'q' || key == 'Q') {
             running = 0;
             continue;
         }
@@ -172,7 +206,6 @@ int tui_run(void)
 
     terminal_clear();
     terminal_move_cursor(1, 1);
-
     terminal_shutdown();
 
     return 0;
