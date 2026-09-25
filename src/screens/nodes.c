@@ -6,6 +6,7 @@
 #include "hrmcli/node_config.h"
 #include "hrmcli/terminal.h"
 #include "hrmcli/ui.h"
+#include "hrmcli/paths.h"
 
 void screen_nodes_init(
     NodesScreenState *state
@@ -26,7 +27,7 @@ void screen_nodes_init(
 
     if (
         node_config_load(
-            "config/defaults/nodes.json",
+            hrmcli_nodes_path(),
             state->nodes,
             NODES_SCREEN_MAX_NODES,
             &state->node_count

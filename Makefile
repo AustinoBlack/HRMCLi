@@ -18,6 +18,7 @@ SRC := \
 	src/main.c \
 	src/app.c \
 	src/config.c \
+	src/paths.c\
 	src/log.c \
 	src/node.c \
 	src/node_config.c \
