@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    {
+      "name": "pve-Atlas",
+      "address": "172.16.1.1",
+      "protocol": "ipmi"
+    },
+    {
+      "name": "Nat",
+      "address": "172.16.1.2",
+      "protocol": "redfish"
+    }
+  ]
+}

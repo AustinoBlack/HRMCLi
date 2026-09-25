@@ -18,6 +18,7 @@ typedef struct {
     int selected;
 
     NodesView view;
+    int load_failed;
 } NodesScreenState;
 
 void screen_nodes_init(

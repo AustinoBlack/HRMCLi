@@ -10,6 +10,8 @@ CFLAGS := \
 	-Wextra \
 	-Wpedantic
 
+LDLIBS := -lcjson
+
 TARGET := hrmcli
 
 SRC := \
@@ -18,6 +20,7 @@ SRC := \
 	src/config.c \
 	src/log.c \
 	src/node.c \
+	src/node_config.c \
 	src/terminal.c \
 	src/ui.c \
 	src/menu.c \
@@ -39,7 +42,7 @@ OBJ := $(SRC:.c=.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) $(OBJ) -o $(TARGET)
+	$(CC) $(OBJ) -o $(TARGET) $(LDLIBS)
 
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

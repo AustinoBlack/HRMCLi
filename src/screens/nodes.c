@@ -3,51 +3,9 @@
 #include <string.h>
 
 #include "hrmcli/screens/nodes.h"
+#include "hrmcli/node_config.h"
 #include "hrmcli/terminal.h"
 #include "hrmcli/ui.h"
-
-
-static void add_test_node(
-    NodesScreenState *state,
-    const char *name,
-    const char *address,
-    NodeProtocol protocol,
-    NodeStatus status,
-    NodePowerState power
-)
-{
-    Node *node;
-
-    if (
-        state == NULL ||
-        state->node_count >= NODES_SCREEN_MAX_NODES
-    ) {
-        return;
-    }
-
-    node = &state->nodes[state->node_count];
-
-    snprintf(
-        node->name,
-        sizeof(node->name),
-        "%s",
-        name
-    );
-
-    snprintf(
-        node->address,
-        sizeof(node->address),
-        "%s",
-        address
-    );
-
-    node->protocol = protocol;
-    node->status = status;
-    node->power = power;
-
-    state->node_count++;
-}
-
 
 void screen_nodes_init(
     NodesScreenState *state
@@ -66,38 +24,20 @@ void screen_nodes_init(
     state->selected = 0;
     state->view = NODES_VIEW_LIST;
 
-    /*
-     * Temporary development nodes.
-     *
-     * These will be replaced by JSON-loaded
-     * configuration in the next milestone.
-     */
-    add_test_node(
-        state,
-        "pve-Leela",
-        "192.168.100.10",
-        NODE_PROTOCOL_IPMI,
-        NODE_STATUS_ONLINE,
-        NODE_POWER_ON
-    );
+    if (
+        node_config_load(
+            "config/defaults/nodes.json",
+            state->nodes,
+            NODES_SCREEN_MAX_NODES,
+            &state->node_count
+        ) != 0
+    ) {
+        state->load_failed = 1;
+        state->node_count = 0;
+        return;
+    }
 
-    add_test_node(
-        state,
-        "pve-Tycho",
-        "192.168.100.11",
-        NODE_PROTOCOL_IPMI,
-        NODE_STATUS_OFFLINE,
-        NODE_POWER_UNKNOWN
-    );
-
-    add_test_node(
-        state,
-        "pve-Thoth",
-        "192.168.100.12",
-        NODE_PROTOCOL_IPMI,
-        NODE_STATUS_ONLINE,
-        NODE_POWER_OFF
-    );
+    state->load_failed = 0;
 }
 
 
@@ -130,6 +70,17 @@ static void draw_node_list(
         content.width,
         "Managed Nodes"
     );
+
+    /* Failed to load JSON trigger */
+    if (state->load_failed) {
+        ui_draw_centered_text(
+            content.row + 3,
+            content.col,
+            content.width,
+            "Failed to load node configuration."
+        );
+        return;
+    }
 
     if (state->node_count == 0) {
         ui_draw_centered_text(
