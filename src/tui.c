@@ -32,6 +32,7 @@ typedef struct {
     TuiScreen current_screen;
 
     UiMenu main_menu;
+    NodesScreenState nodes;
 
     int quit_requested;
 } TuiState;
@@ -116,9 +117,10 @@ static void draw_primary_pane(
 
     case SCREEN_NODES:
         screen_nodes_draw(
-            pane
+            pane,
+            &state->nodes
         );
-        break;
+        break; 
 
     case SCREEN_CONFIGURATION:
         screen_configuration_draw(
@@ -267,7 +269,7 @@ static void handle_primary_pane_key(
 
     case SCREEN_NODES:
         screen_nodes_handle_key(
-            pane,
+            &state->nodes,
             key
         );
         break;
@@ -346,6 +348,10 @@ int tui_run(void)
     screen_main_menu_init(
         &state.main_menu,
         empty_rect
+    );
+    
+    screen_nodes_init(
+        &state.nodes
     );
 
     /*

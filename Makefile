@@ -17,6 +17,7 @@ SRC := \
 	src/app.c \
 	src/config.c \
 	src/log.c \
+	src/node.c \
 	src/terminal.c \
 	src/ui.c \
 	src/menu.c \
@@ -29,7 +30,7 @@ SRC := \
 	src/screens/configuration.c \
 	src/screens/logs.c \
 	src/screens/cli.c \
-	src/screens/system.c
+	src/screens/system.c \
 
 OBJ := $(SRC:.c=.o)
 
