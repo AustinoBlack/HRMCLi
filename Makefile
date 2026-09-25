@@ -1,7 +1,14 @@
 CC := gcc
 
-CPPFLAGS := -D_POSIX_C_SOURCE=200809L -Iinclude
-CFLAGS := -std=c11 -Wall -Wextra -Wpedantic
+CPPFLAGS := \
+	-D_POSIX_C_SOURCE=200809L \
+	-Iinclude
+
+CFLAGS := \
+	-std=c11 \
+	-Wall \
+	-Wextra \
+	-Wpedantic
 
 TARGET := hrmcli
 
@@ -10,12 +17,19 @@ SRC := \
 	src/app.c \
 	src/config.c \
 	src/log.c \
-	src/terminal.c\
-	src/tui.c\
-	src/ui.c\
-	src/pane.c\
-	src/workspace.c\
-	src/menu.c
+	src/terminal.c \
+	src/ui.c \
+	src/menu.c \
+	src/pane.c \
+	src/workspace.c \
+	src/tui.c \
+	src/screens/main_menu.c \
+	src/screens/dashboard.c \
+	src/screens/nodes.c \
+	src/screens/configuration.c \
+	src/screens/logs.c \
+	src/screens/cli.c \
+	src/screens/system.c
 
 OBJ := $(SRC:.c=.o)
 

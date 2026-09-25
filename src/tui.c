@@ -2,6 +2,15 @@
 
 #include "hrmcli/menu.h"
 #include "hrmcli/pane.h"
+
+#include "hrmcli/screens/main_menu.h"
+#include "hrmcli/screens/dashboard.h"
+#include "hrmcli/screens/nodes.h"
+#include "hrmcli/screens/configuration.h"
+#include "hrmcli/screens/logs.h"
+#include "hrmcli/screens/cli.h"
+#include "hrmcli/screens/system.h"
+
 #include "hrmcli/terminal.h"
 #include "hrmcli/tui.h"
 #include "hrmcli/ui.h"
@@ -21,24 +30,11 @@ typedef enum {
 
 typedef struct {
     TuiScreen current_screen;
+
     UiMenu main_menu;
+
     int quit_requested;
 } TuiState;
-
-
-static const char *main_menu_items[] = {
-    "Dashboard",
-    "Nodes",
-    "Configuration",
-    "Logs",
-    "HRMCLi CLI",
-    "System",
-    "Quit"
-};
-
-
-#define MAIN_MENU_COUNT \
-    ((int)(sizeof(main_menu_items) / sizeof(main_menu_items[0])))
 
 
 static void set_screen(
@@ -88,119 +84,6 @@ static void set_screen(
 }
 
 
-static void draw_placeholder_screen(
-    UiPane *pane,
-    const char *heading
-)
-{
-    UiRect content;
-
-    content = ui_rect_inset(
-        pane->rect,
-        2
-    );
-
-    if (
-        content.width <= 0 ||
-        content.height <= 0
-    ) {
-        return;
-    }
-
-    ui_draw_centered_text(
-        content.row + 2,
-        content.col,
-        content.width,
-        heading
-    );
-
-    ui_draw_centered_text(
-        content.row + 4,
-        content.col,
-        content.width,
-        "This screen is not implemented yet."
-    );
-
-    ui_draw_centered_text(
-        content.row + 6,
-        content.col,
-        content.width,
-        "Press Esc to return."
-    );
-}
-
-
-static void draw_nodes_screen(
-    UiPane *pane
-)
-{
-    UiRect content;
-
-    content = ui_rect_inset(
-        pane->rect,
-        2
-    );
-
-    if (
-        content.width <= 0 ||
-        content.height <= 0
-    ) {
-        return;
-    }
-
-    ui_draw_centered_text(
-        content.row + 2,
-        content.col,
-        content.width,
-        "Managed Nodes"
-    );
-
-    ui_draw_centered_text(
-        content.row + 4,
-        content.col,
-        content.width,
-        "No nodes configured."
-    );
-
-    ui_draw_centered_text(
-        content.row + 6,
-        content.col,
-        content.width,
-        "Press Esc to return."
-    );
-}
-
-
-static void draw_main_menu(
-    UiPane *pane,
-    TuiState *state
-)
-{
-    UiRect content;
-
-    content = ui_rect_inset(
-        pane->rect,
-        2
-    );
-
-    if (
-        content.width <= 0 ||
-        content.height <= 0
-    ) {
-        return;
-    }
-
-    ui_menu_set_rect(
-        &state->main_menu,
-        content
-    );
-
-    ui_menu_draw(
-        &state->main_menu
-    );
-}
-
-
 static void draw_primary_pane(
     UiPane *pane
 )
@@ -219,87 +102,48 @@ static void draw_primary_pane(
 
     switch (state->current_screen) {
     case SCREEN_MAIN_MENU:
-        draw_main_menu(
+        screen_main_menu_draw(
             pane,
-            state
+            &state->main_menu
         );
         break;
 
     case SCREEN_DASHBOARD:
-        draw_placeholder_screen(
-            pane,
-            "Dashboard"
+        screen_dashboard_draw(
+            pane
         );
         break;
 
     case SCREEN_NODES:
-        draw_nodes_screen(
+        screen_nodes_draw(
             pane
         );
         break;
 
     case SCREEN_CONFIGURATION:
-        draw_placeholder_screen(
-            pane,
-            "Configuration"
+        screen_configuration_draw(
+            pane
         );
         break;
 
     case SCREEN_LOGS:
-        draw_placeholder_screen(
-            pane,
-            "Logs"
+        screen_logs_draw(
+            pane
         );
         break;
 
     case SCREEN_CLI:
-        draw_placeholder_screen(
-            pane,
-            "HRMCLi Command Line"
+        screen_cli_draw(
+            pane
         );
         break;
 
     case SCREEN_SYSTEM:
-        draw_placeholder_screen(
-            pane,
-            "System"
+        screen_system_draw(
+            pane
         );
         break;
     }
-}
-
-
-static void draw_secondary_pane(
-    UiPane *pane
-)
-{
-    UiRect content;
-
-    content = ui_rect_inset(
-        pane->rect,
-        2
-    );
-
-    if (
-        content.width <= 0 ||
-        content.height <= 0
-    ) {
-        return;
-    }
-
-    ui_draw_centered_text(
-        content.row + 2,
-        content.col,
-        content.width,
-        "HRMCLi CLI"
-    );
-
-    ui_draw_centered_text(
-        content.row + 4,
-        content.col,
-        content.width,
-        "HRMCLi> _"
-    );
 }
 
 
@@ -309,8 +153,15 @@ static void handle_main_menu_selection(
     int selected
 )
 {
+    if (
+        pane == NULL ||
+        state == NULL
+    ) {
+        return;
+    }
+
     switch (selected) {
-    case 0:
+    case MAIN_MENU_DASHBOARD:
         set_screen(
             pane,
             state,
@@ -318,7 +169,7 @@ static void handle_main_menu_selection(
         );
         break;
 
-    case 1:
+    case MAIN_MENU_NODES:
         set_screen(
             pane,
             state,
@@ -326,7 +177,7 @@ static void handle_main_menu_selection(
         );
         break;
 
-    case 2:
+    case MAIN_MENU_CONFIGURATION:
         set_screen(
             pane,
             state,
@@ -334,7 +185,7 @@ static void handle_main_menu_selection(
         );
         break;
 
-    case 3:
+    case MAIN_MENU_LOGS:
         set_screen(
             pane,
             state,
@@ -342,7 +193,7 @@ static void handle_main_menu_selection(
         );
         break;
 
-    case 4:
+    case MAIN_MENU_CLI:
         set_screen(
             pane,
             state,
@@ -350,7 +201,7 @@ static void handle_main_menu_selection(
         );
         break;
 
-    case 5:
+    case MAIN_MENU_SYSTEM:
         set_screen(
             pane,
             state,
@@ -358,7 +209,7 @@ static void handle_main_menu_selection(
         );
         break;
 
-    case 6:
+    case MAIN_MENU_QUIT:
         state->quit_requested = 1;
         break;
 
@@ -386,31 +237,68 @@ static void handle_primary_pane_key(
         return;
     }
 
-    /*
-     * Currently the main menu is the only
-     * primary screen with local key handling.
-     */
-    if (
-        state->current_screen !=
-        SCREEN_MAIN_MENU
-    ) {
-        return;
-    }
+    switch (state->current_screen) {
+    case SCREEN_MAIN_MENU:
+        selected =
+            screen_main_menu_handle_key(
+                &state->main_menu,
+                key
+            );
 
-    selected = ui_menu_handle_key(
-        &state->main_menu,
-        key
-    );
+        if (
+            selected !=
+            UI_MENU_NO_SELECTION
+        ) {
+            handle_main_menu_selection(
+                pane,
+                state,
+                selected
+            );
+        }
 
-    if (
-        selected !=
-        UI_MENU_NO_SELECTION
-    ) {
-        handle_main_menu_selection(
+        break;
+
+    case SCREEN_DASHBOARD:
+        screen_dashboard_handle_key(
             pane,
-            state,
-            selected
+            key
         );
+        break;
+
+    case SCREEN_NODES:
+        screen_nodes_handle_key(
+            pane,
+            key
+        );
+        break;
+
+    case SCREEN_CONFIGURATION:
+        screen_configuration_handle_key(
+            pane,
+            key
+        );
+        break;
+
+    case SCREEN_LOGS:
+        screen_logs_handle_key(
+            pane,
+            key
+        );
+        break;
+
+    case SCREEN_CLI:
+        screen_cli_handle_key(
+            pane,
+            key
+        );
+        break;
+
+    case SCREEN_SYSTEM:
+        screen_system_handle_key(
+            pane,
+            key
+        );
+        break;
     }
 }
 
@@ -448,22 +336,20 @@ int tui_run(void)
     }
 
     /*
-     * Initialize application TUI state.
+     * Initialize global TUI state.
      */
     state.current_screen =
         SCREEN_MAIN_MENU;
 
     state.quit_requested = 0;
 
-    ui_menu_init(
+    screen_main_menu_init(
         &state.main_menu,
-        empty_rect,
-        main_menu_items,
-        MAIN_MENU_COUNT
+        empty_rect
     );
 
     /*
-     * Initialize primary and secondary panes.
+     * Initialize panes.
      */
     ui_pane_init(
         &primary,
@@ -478,22 +364,34 @@ int tui_run(void)
     );
 
     primary.userdata = &state;
-    primary.draw = draw_primary_pane;
+
+    primary.draw =
+        draw_primary_pane;
+
     primary.handle_key =
         handle_primary_pane_key;
 
+    /*
+     * The secondary pane is currently always
+     * the HRMCLi command interface.
+     */
     secondary.draw =
-        draw_secondary_pane;
+        screen_cli_draw;
+
+    secondary.handle_key =
+        screen_cli_handle_key;
 
     /*
-     * Determine initial workspace dimensions.
+     * Initialize workspace dimensions.
      */
-    screen = ui_get_screen_rect();
+    screen =
+        ui_get_screen_rect();
 
-    content = ui_rect_inset(
-        screen,
-        1
-    );
+    content =
+        ui_rect_inset(
+            screen,
+            1
+        );
 
     ui_workspace_init(
         &workspace,
@@ -551,8 +449,8 @@ int tui_run(void)
 
         case TERMINAL_KEY_ESCAPE:
             /*
-             * Esc returns to the main menu
-             * from any primary screen.
+             * Return the primary pane to
+             * the main menu.
              */
             if (
                 state.current_screen !=
@@ -582,6 +480,9 @@ int tui_run(void)
 
         /*
          * Temporary split-view shortcut.
+         *
+         * This will eventually become a proper
+         * configurable shortcut/menu action.
          */
         if (
             key == 's' ||
@@ -599,19 +500,8 @@ int tui_run(void)
         }
 
         /*
-         * Global quit shortcut.
-         */
-        if (
-            key == 'q' ||
-            key == 'Q'
-        ) {
-            running = 0;
-            continue;
-        }
-
-        /*
-         * Forward input to whichever pane
-         * currently owns focus.
+         * Pass ordinary input to whichever
+         * pane currently owns focus.
          */
         ui_workspace_handle_key(
             &workspace,
