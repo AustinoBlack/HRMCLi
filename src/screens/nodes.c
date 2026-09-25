@@ -64,9 +64,13 @@ void screen_nodes_init(
     );
 
     state->selected = 0;
+    state->view = NODES_VIEW_LIST;
 
     /*
-     * Temporary in-memory test nodes.
+     * Temporary development nodes.
+     *
+     * These will be replaced by JSON-loaded
+     * configuration in the next milestone.
      */
     add_test_node(
         state,
@@ -97,7 +101,7 @@ void screen_nodes_init(
 }
 
 
-void screen_nodes_draw(
+static void draw_node_list(
     UiPane *pane,
     NodesScreenState *state
 )
@@ -107,13 +111,6 @@ void screen_nodes_draw(
     char line[256];
 
     int row;
-
-    if (
-        pane == NULL ||
-        state == NULL
-    ) {
-        return;
-    }
 
     content = ui_rect_inset(
         pane->rect,
@@ -156,7 +153,7 @@ void screen_nodes_draw(
 
         if (
             row >=
-            content.row + content.height
+            content.row + content.height - 1
         ) {
             break;
         }
@@ -205,6 +202,171 @@ void screen_nodes_draw(
 }
 
 
+static void draw_node_detail(
+    UiPane *pane,
+    NodesScreenState *state
+)
+{
+    UiRect content;
+
+    Node *node;
+
+    char line[256];
+
+    int row;
+
+    if (
+        state->node_count <= 0 ||
+        state->selected < 0 ||
+        state->selected >= state->node_count
+    ) {
+        return;
+    }
+
+    node = &state->nodes[state->selected];
+
+    content = ui_rect_inset(
+        pane->rect,
+        2
+    );
+
+    if (
+        content.width <= 0 ||
+        content.height <= 0
+    ) {
+        return;
+    }
+
+    ui_draw_centered_text(
+        content.row,
+        content.col,
+        content.width,
+        node->name
+    );
+
+    row = content.row + 3;
+
+    snprintf(
+        line,
+        sizeof(line),
+        "Name:        %s",
+        node->name
+    );
+
+    ui_draw_text(
+        row++,
+        content.col + 2,
+        line
+    );
+
+    snprintf(
+        line,
+        sizeof(line),
+        "BMC Address: %s",
+        node->address
+    );
+
+    ui_draw_text(
+        row++,
+        content.col + 2,
+        line
+    );
+
+    snprintf(
+        line,
+        sizeof(line),
+        "Protocol:    %s",
+        node_protocol_string(
+            node->protocol
+        )
+    );
+
+    ui_draw_text(
+        row++,
+        content.col + 2,
+        line
+    );
+
+    snprintf(
+        line,
+        sizeof(line),
+        "BMC Status:  %s",
+        node_status_string(
+            node->status
+        )
+    );
+
+    ui_draw_text(
+        row++,
+        content.col + 2,
+        line
+    );
+
+    snprintf(
+        line,
+        sizeof(line),
+        "Power State: %s",
+        node_power_string(
+            node->power
+        )
+    );
+
+    ui_draw_text(
+        row++,
+        content.col + 2,
+        line
+    );
+
+    /*
+     * These are intentionally non-functional
+     * placeholders for upcoming node actions.
+     */
+    row += 2;
+
+    ui_draw_text(
+        row,
+        content.col + 2,
+        "[ Power ]   [ Sensors ]   [ SEL ]   [ Info ]"
+    );
+
+    ui_draw_text(
+        content.row + content.height - 1,
+        content.col,
+        "Esc Back to Nodes"
+    );
+}
+
+
+void screen_nodes_draw(
+    UiPane *pane,
+    NodesScreenState *state
+)
+{
+    if (
+        pane == NULL ||
+        state == NULL
+    ) {
+        return;
+    }
+
+    switch (state->view) {
+    case NODES_VIEW_LIST:
+        draw_node_list(
+            pane,
+            state
+        );
+        break;
+
+    case NODES_VIEW_DETAIL:
+        draw_node_detail(
+            pane,
+            state
+        );
+        break;
+    }
+}
+
+
 void screen_nodes_handle_key(
     NodesScreenState *state,
     int key
@@ -214,6 +376,14 @@ void screen_nodes_handle_key(
         state == NULL ||
         state->node_count <= 0
     ) {
+        return;
+    }
+
+    /*
+     * Detail view does not yet have
+     * interactive controls.
+     */
+    if (state->view == NODES_VIEW_DETAIL) {
         return;
     }
 
@@ -249,7 +419,34 @@ void screen_nodes_handle_key(
             state->node_count - 1;
         break;
 
+    case TERMINAL_KEY_ENTER:
+        state->view =
+            NODES_VIEW_DETAIL;
+        break;
+
     default:
         break;
     }
+}
+
+
+int screen_nodes_handle_escape(
+    NodesScreenState *state
+)
+{
+    if (state == NULL) {
+        return 0;
+    }
+
+    if (
+        state->view ==
+        NODES_VIEW_DETAIL
+    ) {
+        state->view =
+            NODES_VIEW_LIST;
+
+        return 1;
+    }
+
+    return 0;
 }

@@ -6,11 +6,18 @@
 
 #define NODES_SCREEN_MAX_NODES 16
 
+typedef enum {
+    NODES_VIEW_LIST,
+    NODES_VIEW_DETAIL
+} NodesView;
+
 typedef struct {
     Node nodes[NODES_SCREEN_MAX_NODES];
 
     int node_count;
     int selected;
+
+    NodesView view;
 } NodesScreenState;
 
 void screen_nodes_init(
@@ -25,6 +32,16 @@ void screen_nodes_draw(
 void screen_nodes_handle_key(
     NodesScreenState *state,
     int key
+);
+
+/*
+ * Returns 1 if Esc was consumed by the Nodes screen.
+ *
+ * Returns 0 if the Nodes screen is already at its
+ * top level and the caller should navigate away.
+ */
+int screen_nodes_handle_escape(
+    NodesScreenState *state
 );
 
 #endif

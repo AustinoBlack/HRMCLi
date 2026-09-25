@@ -454,10 +454,33 @@ int tui_run(void)
             continue;
 
         case TERMINAL_KEY_ESCAPE:
+        /*
+        * Give the current screen a chance
+        * to consume Esc before navigating
+        * back to the main menu.
+        */
+            if (
+                state.current_screen ==
+                SCREEN_NODES
+            ) {
+            if (
+                screen_nodes_handle_escape(
+                    &state.nodes
+                )
+            ) {
+                draw_screen(
+                    &workspace
+                );
+
+                continue;
+                }
+            }
+
             /*
-             * Return the primary pane to
-             * the main menu.
-             */
+            * Nothing inside the current screen
+            * consumed Esc, so return to the
+            * main menu.
+            */
             if (
                 state.current_screen !=
                 SCREEN_MAIN_MENU
@@ -473,7 +496,7 @@ int tui_run(void)
                 );
             }
 
-            continue;
+            continue; 
 
         case TERMINAL_KEY_TERMINATE:
         case TERMINAL_KEY_CTRL_C:
