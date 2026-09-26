@@ -19,6 +19,7 @@ SRC := \
 	src/app.c \
 	src/config.c \
 	src/paths.c\
+	src/startup.c \
 	src/log.c \
 	src/node.c \
 	src/node_config.c \
@@ -28,6 +29,7 @@ SRC := \
 	src/pane.c \
 	src/workspace.c \
 	src/tui.c \
+	src/screens/startup.c \
 	src/screens/main_menu.c \
 	src/screens/dashboard.c \
 	src/screens/nodes.c \

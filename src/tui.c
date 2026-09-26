@@ -1,8 +1,11 @@
 #include <stddef.h>
+#include <time.h>
 
 #include "hrmcli/menu.h"
 #include "hrmcli/pane.h"
+#include "hrmcli/startup.h"
 
+#include "hrmcli/screens/startup.h"
 #include "hrmcli/screens/main_menu.h"
 #include "hrmcli/screens/dashboard.h"
 #include "hrmcli/screens/nodes.h"
@@ -85,6 +88,86 @@ static void set_screen(
 }
 
 
+static void draw_startup(
+    UiPane *pane,
+    StartupState *state
+)
+{
+    terminal_clear();
+
+    ui_pane_draw_frame(
+        pane
+    );
+
+    screen_startup_draw(
+        pane,
+        state
+    );
+}
+
+
+static void show_startup_screen(void)
+{
+    UiRect screen;
+    UiRect content;
+
+    UiPane startup_pane;
+
+    StartupState startup_state;
+
+    struct timespec delay;
+
+    /*
+     * Run the actual startup checks.
+     */
+    startup_init(
+        &startup_state
+    );
+
+    startup_run_checks(
+        &startup_state
+    );
+
+    /*
+     * Give the startup screen nearly the
+     * entire terminal.
+     */
+    screen = ui_get_screen_rect();
+
+    content = ui_rect_inset(
+        screen,
+        1
+    );
+
+    ui_pane_init(
+        &startup_pane,
+        content,
+        "STARTUP"
+    );
+
+    startup_pane.focusable = 0;
+
+    draw_startup(
+        &startup_pane,
+        &startup_state
+    );
+
+    /*
+     * Keep the completed checklist visible
+     * briefly before entering the main UI.
+     *
+     * We can make this configurable later.
+     */
+    delay.tv_sec = 3;
+    delay.tv_nsec = 250000000L;
+
+    nanosleep(
+        &delay,
+        NULL
+    );
+}
+
+
 static void draw_primary_pane(
     UiPane *pane
 )
@@ -120,7 +203,7 @@ static void draw_primary_pane(
             pane,
             &state->nodes
         );
-        break; 
+        break;
 
     case SCREEN_CONFIGURATION:
         screen_configuration_draw(
@@ -333,9 +416,19 @@ int tui_run(void)
     int key;
     int running = 1;
 
+    /*
+     * We cannot show anything until the
+     * terminal backend has initialized.
+     */
     if (terminal_init() != 0) {
         return 1;
     }
+
+    /*
+     * Run and display startup checks before
+     * initializing the normal HRMCLi workspace.
+     */
+    show_startup_screen();
 
     /*
      * Initialize global TUI state.
@@ -349,13 +442,13 @@ int tui_run(void)
         &state.main_menu,
         empty_rect
     );
-    
+
     screen_nodes_init(
         &state.nodes
     );
 
     /*
-     * Initialize panes.
+     * Initialize primary and secondary panes.
      */
     ui_pane_init(
         &primary,
@@ -378,8 +471,8 @@ int tui_run(void)
         handle_primary_pane_key;
 
     /*
-     * The secondary pane is currently always
-     * the HRMCLi command interface.
+     * The optional secondary pane is currently
+     * always the HRMCLi command interface.
      */
     secondary.draw =
         screen_cli_draw;
@@ -388,7 +481,7 @@ int tui_run(void)
         screen_cli_handle_key;
 
     /*
-     * Initialize workspace dimensions.
+     * Determine initial workspace dimensions.
      */
     screen =
         ui_get_screen_rect();
@@ -411,7 +504,7 @@ int tui_run(void)
     );
 
     /*
-     * Main event loop.
+     * Main HRMCLi event loop.
      */
     while (running) {
         key = terminal_read_key();
@@ -454,33 +547,32 @@ int tui_run(void)
             continue;
 
         case TERMINAL_KEY_ESCAPE:
-        /*
-        * Give the current screen a chance
-        * to consume Esc before navigating
-        * back to the main menu.
-        */
+            /*
+             * Nodes has its own nested navigation.
+             * Give it the first opportunity to
+             * consume Escape.
+             */
             if (
                 state.current_screen ==
                 SCREEN_NODES
             ) {
-            if (
-                screen_nodes_handle_escape(
-                    &state.nodes
-                )
-            ) {
-                draw_screen(
-                    &workspace
-                );
+                if (
+                    screen_nodes_handle_escape(
+                        &state.nodes
+                    )
+                ) {
+                    draw_screen(
+                        &workspace
+                    );
 
-                continue;
+                    continue;
                 }
             }
 
             /*
-            * Nothing inside the current screen
-            * consumed Esc, so return to the
-            * main menu.
-            */
+             * Otherwise Esc returns the primary
+             * pane to the main menu.
+             */
             if (
                 state.current_screen !=
                 SCREEN_MAIN_MENU
@@ -496,7 +588,7 @@ int tui_run(void)
                 );
             }
 
-            continue; 
+            continue;
 
         case TERMINAL_KEY_TERMINATE:
         case TERMINAL_KEY_CTRL_C:
@@ -509,9 +601,6 @@ int tui_run(void)
 
         /*
          * Temporary split-view shortcut.
-         *
-         * This will eventually become a proper
-         * configurable shortcut/menu action.
          */
         if (
             key == 's' ||
@@ -529,8 +618,8 @@ int tui_run(void)
         }
 
         /*
-         * Pass ordinary input to whichever
-         * pane currently owns focus.
+         * Pass ordinary input to the currently
+         * focused pane.
          */
         ui_workspace_handle_key(
             &workspace,
