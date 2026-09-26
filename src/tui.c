@@ -4,6 +4,10 @@
 #include "hrmcli/menu.h"
 #include "hrmcli/pane.h"
 #include "hrmcli/startup.h"
+#include "hrmcli/terminal.h"
+#include "hrmcli/tui.h"
+#include "hrmcli/ui.h"
+#include "hrmcli/workspace.h"
 
 #include "hrmcli/screens/startup.h"
 #include "hrmcli/screens/main_menu.h"
@@ -13,11 +17,6 @@
 #include "hrmcli/screens/logs.h"
 #include "hrmcli/screens/cli.h"
 #include "hrmcli/screens/system.h"
-
-#include "hrmcli/terminal.h"
-#include "hrmcli/tui.h"
-#include "hrmcli/ui.h"
-#include "hrmcli/workspace.h"
 
 
 typedef enum {
@@ -39,6 +38,123 @@ typedef struct {
 
     int quit_requested;
 } TuiState;
+
+
+typedef struct {
+    UiPane *pane;
+} StartupDisplayContext;
+
+
+/*
+ * Called by startup.c whenever a startup check
+ * begins or finishes.
+ *
+ * This redraws the startup screen so checks
+ * visibly progress one at a time.
+ */
+static void startup_progress(
+    const StartupState *state,
+    void *userdata
+)
+{
+    StartupDisplayContext *context;
+    struct timespec delay;
+
+    context = userdata;
+
+    if (
+        context == NULL ||
+        context->pane == NULL ||
+        state == NULL
+    ) {
+        return;
+    }
+
+    terminal_clear();
+
+    ui_pane_draw_frame(
+        context->pane
+    );
+
+    screen_startup_draw(
+        context->pane,
+        (StartupState *)state
+    );
+
+    /*
+     * Most checks complete almost instantly.
+     * This small delay makes the transition from
+     * PENDING to OK/WARN/FAIL visible.
+     */
+    delay.tv_sec = 0;
+    delay.tv_nsec = 125000000L;
+
+    nanosleep(
+        &delay,
+        NULL
+    );
+}
+
+
+static void show_startup_screen(void)
+{
+    UiRect screen;
+    UiRect content;
+
+    UiPane startup_pane;
+
+    StartupState startup_state;
+    StartupDisplayContext context;
+
+    struct timespec delay;
+
+    startup_init(
+        &startup_state
+    );
+
+    /*
+     * Build the startup pane before running
+     * checks so the callback can redraw it.
+     */
+    screen = ui_get_screen_rect();
+
+    content = ui_rect_inset(
+        screen,
+        1
+    );
+
+    ui_pane_init(
+        &startup_pane,
+        content,
+        "STARTUP"
+    );
+
+    startup_pane.focusable = 0;
+
+    context.pane = &startup_pane;
+
+    /*
+     * Each check will call startup_progress()
+     * when it begins and when it finishes.
+     */
+    startup_run_checks(
+        &startup_state,
+        startup_progress,
+        &context
+    );
+
+    /*
+     * Leave the completed checklist visible
+     * briefly before entering the main UI.
+     */
+    delay.tv_sec = 1;
+    delay.tv_nsec = 500000000L;
+
+    nanosleep(
+        &delay,
+        NULL
+    );
+}
 
 
 static void set_screen(
@@ -85,86 +201,6 @@ static void set_screen(
         pane->title = "SYSTEM";
         break;
     }
-}
-
-
-static void draw_startup(
-    UiPane *pane,
-    StartupState *state
-)
-{
-    terminal_clear();
-
-    ui_pane_draw_frame(
-        pane
-    );
-
-    screen_startup_draw(
-        pane,
-        state
-    );
-}
-
-
-static void show_startup_screen(void)
-{
-    UiRect screen;
-    UiRect content;
-
-    UiPane startup_pane;
-
-    StartupState startup_state;
-
-    struct timespec delay;
-
-    /*
-     * Run the actual startup checks.
-     */
-    startup_init(
-        &startup_state
-    );
-
-    startup_run_checks(
-        &startup_state
-    );
-
-    /*
-     * Give the startup screen nearly the
-     * entire terminal.
-     */
-    screen = ui_get_screen_rect();
-
-    content = ui_rect_inset(
-        screen,
-        1
-    );
-
-    ui_pane_init(
-        &startup_pane,
-        content,
-        "STARTUP"
-    );
-
-    startup_pane.focusable = 0;
-
-    draw_startup(
-        &startup_pane,
-        &startup_state
-    );
-
-    /*
-     * Keep the completed checklist visible
-     * briefly before entering the main UI.
-     *
-     * We can make this configurable later.
-     */
-    delay.tv_sec = 3;
-    delay.tv_nsec = 250000000L;
-
-    nanosleep(
-        &delay,
-        NULL
-    );
 }
 
 
@@ -417,21 +453,20 @@ int tui_run(void)
     int running = 1;
 
     /*
-     * We cannot show anything until the
-     * terminal backend has initialized.
+     * Terminal initialization must happen before
+     * anything can be drawn.
      */
     if (terminal_init() != 0) {
         return 1;
     }
 
     /*
-     * Run and display startup checks before
-     * initializing the normal HRMCLi workspace.
+     * Run the animated startup checklist.
      */
     show_startup_screen();
 
     /*
-     * Initialize global TUI state.
+     * Initialize the normal application state.
      */
     state.current_screen =
         SCREEN_MAIN_MENU;
@@ -448,7 +483,7 @@ int tui_run(void)
     );
 
     /*
-     * Initialize primary and secondary panes.
+     * Initialize the primary application pane.
      */
     ui_pane_init(
         &primary,
@@ -456,13 +491,8 @@ int tui_run(void)
         "HRMCLI"
     );
 
-    ui_pane_init(
-        &secondary,
-        empty_rect,
-        "HRMCLI CLI"
-    );
-
-    primary.userdata = &state;
+    primary.userdata =
+        &state;
 
     primary.draw =
         draw_primary_pane;
@@ -471,9 +501,16 @@ int tui_run(void)
         handle_primary_pane_key;
 
     /*
-     * The optional secondary pane is currently
-     * always the HRMCLi command interface.
+     * Initialize the optional secondary pane.
+     *
+     * For now this is always the HRMCLi CLI.
      */
+    ui_pane_init(
+        &secondary,
+        empty_rect,
+        "HRMCLI CLI"
+    );
+
     secondary.draw =
         screen_cli_draw;
 
@@ -481,7 +518,7 @@ int tui_run(void)
         screen_cli_handle_key;
 
     /*
-     * Determine initial workspace dimensions.
+     * Determine the initial workspace size.
      */
     screen =
         ui_get_screen_rect();
@@ -504,7 +541,7 @@ int tui_run(void)
     );
 
     /*
-     * Main HRMCLi event loop.
+     * Main application event loop.
      */
     while (running) {
         key = terminal_read_key();
@@ -536,6 +573,10 @@ int tui_run(void)
             continue;
 
         case TERMINAL_KEY_TAB:
+            /*
+             * Workspace handles whether Tab
+             * actually changes focus.
+             */
             ui_workspace_toggle_focus(
                 &workspace
             );
@@ -548,9 +589,9 @@ int tui_run(void)
 
         case TERMINAL_KEY_ESCAPE:
             /*
-             * Nodes has its own nested navigation.
-             * Give it the first opportunity to
-             * consume Escape.
+             * Nodes has an internal detail view.
+             * Give it the first chance to consume
+             * Escape.
              */
             if (
                 state.current_screen ==
@@ -570,8 +611,8 @@ int tui_run(void)
             }
 
             /*
-             * Otherwise Esc returns the primary
-             * pane to the main menu.
+             * Otherwise Escape returns to the
+             * main menu.
              */
             if (
                 state.current_screen !=
@@ -600,7 +641,10 @@ int tui_run(void)
         }
 
         /*
-         * Temporary split-view shortcut.
+         * Temporary split-pane shortcut.
+         *
+         * Later this should move into a proper
+         * command/key binding system.
          */
         if (
             key == 's' ||
@@ -618,8 +662,8 @@ int tui_run(void)
         }
 
         /*
-         * Pass ordinary input to the currently
-         * focused pane.
+         * Route normal input to whichever pane
+         * currently has focus.
          */
         ui_workspace_handle_key(
             &workspace,
@@ -638,6 +682,7 @@ int tui_run(void)
 
     terminal_clear();
     terminal_move_cursor(1, 1);
+
     terminal_shutdown();
 
     return 0;

@@ -13,31 +13,68 @@
 #define STARTUP_NODE_TEST_MAX 64
 
 
-static void startup_add_check(
+static int startup_begin_check(
     StartupState *state,
     const char *name,
+    StartupProgressFn progress,
+    void *userdata
+)
+{
+    StartupCheck *check;
+    int index;
+
+    if (
+        state == NULL ||
+        state->check_count >= STARTUP_MAX_CHECKS
+    ) {
+        return -1;
+    }
+
+    index = state->check_count;
+    check = &state->checks[index];
+
+    snprintf(
+        check->name,
+        sizeof(check->name),
+        "%s",
+        name
+    );
+
+    check->message[0] = '\0';
+    check->status = STARTUP_STATUS_PENDING;
+
+    state->check_count++;
+
+    if (progress != NULL) {
+        progress(state, userdata);
+    }
+
+    return index;
+}
+
+
+static void startup_finish_check(
+    StartupState *state,
+    int index,
     StartupStatus status,
-    const char *message
+    const char *message,
+    StartupProgressFn progress,
+    void *userdata
 )
 {
     StartupCheck *check;
 
     if (
         state == NULL ||
-        state->check_count >= STARTUP_MAX_CHECKS
+        index < 0 ||
+        index >= state->check_count
     ) {
         return;
     }
 
-    check =
-        &state->checks[state->check_count];
+    check = &state->checks[index];
 
-    snprintf(
-        check->name,
-        sizeof(check->name),
-        "%s",
-        name != NULL ? name : ""
-    );
+    check->status = status;
 
     snprintf(
         check->message,
@@ -45,8 +82,6 @@ static void startup_add_check(
         "%s",
         message != NULL ? message : ""
     );
-
-    check->status = status;
 
     if (status == STARTUP_STATUS_WARN) {
         state->has_warnings = 1;
@@ -56,19 +91,28 @@ static void startup_add_check(
         state->has_failures = 1;
     }
 
-    state->check_count++;
+    if (progress != NULL) {
+        progress(state, userdata);
+    }
 }
 
-
 static void check_data_directory(
-    StartupState *state
+    StartupState *state,
+    StartupProgressFn progress,
+    void *userdata
 )
 {
     struct stat info;
     char message[STARTUP_CHECK_MESSAGE_MAX];
 
-    const char *path =
-        hrmcli_data_dir();
+    const char *path = hrmcli_data_dir();
+
+    int index = startup_begin_check(
+        state,
+        "Data directory",
+        progress,
+        userdata
+    );
 
     if (
         stat(path, &info) == 0 &&
@@ -81,48 +125,39 @@ static void check_data_directory(
             path
         );
 
-        startup_add_check(
+        startup_finish_check(
             state,
-            "Data directory",
+            index,
             STARTUP_STATUS_OK,
-            message
+            message,
+            progress,
+            userdata
         );
 
         return;
     }
 
-    if (errno == ENOENT) {
-        snprintf(
-            message,
-            sizeof(message),
-            "Not present yet: %s",
-            path
-        );
-    } else {
-        snprintf(
-            message,
-            sizeof(message),
-            "Unable to access %s",
-            path
-        );
-    }
+    snprintf(
+        message,
+        sizeof(message),
+        "Not present yet: %s",
+        path
+    );
 
-    /*
-     * This is only a warning for now because
-     * development builds currently load their
-     * node configuration from the repository.
-     */
-    startup_add_check(
+    startup_finish_check(
         state,
-        "Data directory",
+        index,
         STARTUP_STATUS_WARN,
-        message
+        message,
+        progress,
+        userdata
     );
 }
 
-
 static void check_node_configuration(
-    StartupState *state
+    StartupState *state,
+    StartupProgressFn progress,
+    void *userdata
 )
 {
     Node nodes[STARTUP_NODE_TEST_MAX];
@@ -130,10 +165,19 @@ static void check_node_configuration(
     int node_count = 0;
     int result;
 
+    int config_index;
+    int nodes_index;
+
     char message[STARTUP_CHECK_MESSAGE_MAX];
 
-    const char *path =
-        hrmcli_nodes_path();
+    const char *path = hrmcli_nodes_path();
+
+    config_index = startup_begin_check(
+        state,
+        "Node configuration",
+        progress,
+        userdata
+    );
 
     result = node_config_load(
         path,
@@ -150,43 +194,58 @@ static void check_node_configuration(
             path
         );
 
-        startup_add_check(
+        startup_finish_check(
             state,
-            "Node configuration",
+            config_index,
             STARTUP_STATUS_WARN,
-            message
+            message,
+            progress,
+            userdata
         );
 
-        startup_add_check(
+        nodes_index = startup_begin_check(
             state,
             "Managed nodes",
+            progress,
+            userdata
+        );
+
+        startup_finish_check(
+            state,
+            nodes_index,
             STARTUP_STATUS_WARN,
-            "Node count unavailable"
+            "Node count unavailable",
+            progress,
+            userdata
         );
 
         return;
     }
 
-    snprintf(
-        message,
-        sizeof(message),
-        "%s",
-        path
+    startup_finish_check(
+        state,
+        config_index,
+        STARTUP_STATUS_OK,
+        path,
+        progress,
+        userdata
     );
 
-    startup_add_check(
+    nodes_index = startup_begin_check(
         state,
-        "Node configuration",
-        STARTUP_STATUS_OK,
-        message
+        "Managed nodes",
+        progress,
+        userdata
     );
 
     if (node_count == 0) {
-        startup_add_check(
+        startup_finish_check(
             state,
-            "Managed nodes",
+            nodes_index,
             STARTUP_STATUS_WARN,
-            "No managed nodes configured"
+            "No managed nodes configured",
+            progress,
+            userdata
         );
 
         return;
@@ -200,11 +259,13 @@ static void check_node_configuration(
         node_count == 1 ? "" : "s"
     );
 
-    startup_add_check(
+    startup_finish_check(
         state,
-        "Managed nodes",
+        nodes_index,
         STARTUP_STATUS_OK,
-        message
+        message,
+        progress,
+        userdata
     );
 }
 
@@ -226,21 +287,28 @@ void startup_init(
 
 
 void startup_run_checks(
-    StartupState *state
+    StartupState *state,
+    StartupProgressFn progress,
+    void *userdata
 )
 {
     if (state == NULL) {
         return;
     }
 
-    /*
-     * Allow the startup checks to be run again
-     * without appending duplicate results.
-     */
     state->check_count = 0;
     state->has_warnings = 0;
     state->has_failures = 0;
 
-    check_data_directory(state);
-    check_node_configuration(state);
+    check_data_directory(
+        state,
+        progress,
+        userdata
+    );
+
+    check_node_configuration(
+        state,
+        progress,
+        userdata
+    );
 }

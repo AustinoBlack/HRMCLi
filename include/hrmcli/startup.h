@@ -27,12 +27,19 @@ typedef struct {
     int has_failures;
 } StartupState;
 
+typedef void (*StartupProgressFn)(
+    const StartupState *state,
+    void *userdata
+);
+
 void startup_init(
     StartupState *state
 );
 
 void startup_run_checks(
-    StartupState *state
+    StartupState *state,
+    StartupProgressFn progress,
+    void *userdata
 );
 
 #endif
