@@ -8,6 +8,21 @@
 
 #include "hrmcli/node_config.h"
 
+static const char *protocol_config_string(
+    NodeProtocol protocol
+)
+{
+    switch (protocol) {
+    case NODE_PROTOCOL_IPMI:
+        return "ipmi";
+
+    case NODE_PROTOCOL_REDFISH:
+        return "redfish";
+
+    default:
+        return NULL;
+    }
+}
 
 static NodeConfigStatus read_file(
     const char *path,
@@ -320,6 +335,233 @@ NodeConfigStatus node_config_load(
     return NODE_CONFIG_OK;
 }
 
+NodeConfigStatus node_config_save(
+    const char *path,
+    const Node *nodes,
+    int node_count
+)
+{
+    cJSON *root;
+    cJSON *node_array;
+
+    char *json_data;
+    char *tmp_path;
+
+    FILE *file;
+
+    size_t path_length;
+    size_t json_length;
+    size_t bytes_written;
+
+    if (
+        path == NULL ||
+        nodes == NULL ||
+        node_count < 0
+    ) {
+        return NODE_CONFIG_INVALID_ARGUMENT;
+    }
+
+    root = cJSON_CreateObject();
+
+    if (root == NULL) {
+        return NODE_CONFIG_SERIALIZE_ERROR;
+    }
+
+    node_array = cJSON_CreateArray();
+
+    if (node_array == NULL) {
+        cJSON_Delete(root);
+        return NODE_CONFIG_SERIALIZE_ERROR;
+    }
+
+    if (
+        !cJSON_AddItemToObject(
+            root,
+            "nodes",
+            node_array
+        )
+    ) {
+        cJSON_Delete(node_array);
+        cJSON_Delete(root);
+
+        return NODE_CONFIG_SERIALIZE_ERROR;
+    }
+
+    for (
+        int i = 0;
+        i < node_count;
+        i++
+    ) {
+        cJSON *entry;
+
+        const char *protocol;
+
+        protocol =
+            protocol_config_string(
+                nodes[i].protocol
+            );
+
+        /*
+         * Reject invalid node data rather than
+         * writing a broken configuration.
+         */
+        if (
+            nodes[i].name[0] == '\0' ||
+            nodes[i].address[0] == '\0' ||
+            protocol == NULL
+        ) {
+            cJSON_Delete(root);
+
+            return NODE_CONFIG_INVALID_NODE;
+        }
+
+        entry = cJSON_CreateObject();
+
+        if (entry == NULL) {
+            cJSON_Delete(root);
+
+            return NODE_CONFIG_SERIALIZE_ERROR;
+        }
+
+        if (
+            cJSON_AddStringToObject(
+                entry,
+                "name",
+                nodes[i].name
+            ) == NULL ||
+            cJSON_AddStringToObject(
+                entry,
+                "address",
+                nodes[i].address
+            ) == NULL ||
+            cJSON_AddStringToObject(
+                entry,
+                "protocol",
+                protocol
+            ) == NULL
+        ) {
+            cJSON_Delete(entry);
+            cJSON_Delete(root);
+
+            return NODE_CONFIG_SERIALIZE_ERROR;
+        }
+
+        if (
+            !cJSON_AddItemToArray(
+                node_array,
+                entry
+            )
+        ) {
+            cJSON_Delete(entry);
+            cJSON_Delete(root);
+
+            return NODE_CONFIG_SERIALIZE_ERROR;
+        }
+    }
+
+    /*
+     * Pretty-print the file so nodes.json remains
+     * readable by a human when troubleshooting.
+     */
+    json_data = cJSON_Print(root);
+
+    cJSON_Delete(root);
+
+    if (json_data == NULL) {
+        return NODE_CONFIG_SERIALIZE_ERROR;
+    }
+
+    /*
+     * Write to a temporary file first.
+     *
+     * This prevents a failed write from destroying
+     * the currently valid nodes.json.
+     */
+    path_length = strlen(path);
+
+    tmp_path = malloc(
+        path_length + 5
+    );
+
+    if (tmp_path == NULL) {
+        cJSON_free(json_data);
+
+        return NODE_CONFIG_FILE_WRITE_ERROR;
+    }
+
+    snprintf(
+        tmp_path,
+        path_length + 5,
+        "%s.tmp",
+        path
+    );
+
+    file = fopen(
+        tmp_path,
+        "wb"
+    );
+
+    if (file == NULL) {
+        free(tmp_path);
+        cJSON_free(json_data);
+
+        return NODE_CONFIG_FILE_WRITE_ERROR;
+    }
+
+    json_length = strlen(json_data);
+
+    bytes_written = fwrite(
+        json_data,
+        1,
+        json_length,
+        file
+    );
+
+    if (
+        bytes_written != json_length ||
+        fflush(file) != 0
+    ) {
+        fclose(file);
+        remove(tmp_path);
+
+        free(tmp_path);
+        cJSON_free(json_data);
+
+        return NODE_CONFIG_FILE_WRITE_ERROR;
+    }
+
+    if (fclose(file) != 0) {
+        remove(tmp_path);
+
+        free(tmp_path);
+        cJSON_free(json_data);
+
+        return NODE_CONFIG_FILE_WRITE_ERROR;
+    }
+
+    /*
+     * Rename replaces the live configuration only
+     * after the temporary file was written fully.
+     */
+    if (
+        rename(
+            tmp_path,
+            path
+        ) != 0
+    ) {
+        remove(tmp_path);
+
+        free(tmp_path);
+        cJSON_free(json_data);
+
+        return NODE_CONFIG_FILE_WRITE_ERROR;
+    }
+
+    free(tmp_path);
+    cJSON_free(json_data);
+
+    return NODE_CONFIG_OK;
+}
 
 const char *node_config_status_string(
     NodeConfigStatus status
@@ -349,6 +591,12 @@ const char *node_config_status_string(
 
     case NODE_CONFIG_INVALID_ARGUMENT:
         return "Invalid argument";
+
+    case NODE_CONFIG_FILE_WRITE_ERROR:
+        return "File write error";
+
+    case NODE_CONFIG_SERIALIZE_ERROR:
+        return "JSON serialization error";
 
     default:
         return "Unknown error";

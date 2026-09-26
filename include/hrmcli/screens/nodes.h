@@ -5,11 +5,34 @@
 #include "hrmcli/pane.h"
 
 #define NODES_SCREEN_MAX_NODES 16
+#define NODE_FORM_MESSAGE_MAX 128
+
 
 typedef enum {
     NODES_VIEW_LIST,
-    NODES_VIEW_DETAIL
+    NODES_VIEW_DETAIL,
+    NODES_VIEW_ADD
 } NodesView;
+
+
+typedef enum {
+    NODE_FORM_NAME,
+    NODE_FORM_ADDRESS,
+    NODE_FORM_PROTOCOL,
+    NODE_FORM_SAVE
+} NodeFormField;
+
+
+typedef struct {
+    Node node;
+
+    NodeFormField field;
+
+    int cursor;
+
+    char message[NODE_FORM_MESSAGE_MAX];
+} NodeFormState;
+
 
 typedef struct {
     Node nodes[NODES_SCREEN_MAX_NODES];
@@ -18,8 +41,12 @@ typedef struct {
     int selected;
 
     NodesView view;
+
     int load_failed;
+
+    NodeFormState form;
 } NodesScreenState;
+
 
 void screen_nodes_init(
     NodesScreenState *state
@@ -35,12 +62,6 @@ void screen_nodes_handle_key(
     int key
 );
 
-/*
- * Returns 1 if Esc was consumed by the Nodes screen.
- *
- * Returns 0 if the Nodes screen is already at its
- * top level and the caller should navigate away.
- */
 int screen_nodes_handle_escape(
     NodesScreenState *state
 );

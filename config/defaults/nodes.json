@@ -1,13 +1,11 @@
 {
-  "nodes": [
-    {
-      "name": "pve-Leela",
-      "address": "192.168.100.10",
-      "protocol": "ipmi"
-    },
-    {
-      "name": "Tycho",
-      "address": "192.168.100.12"
-    }
-  ]
+	"nodes":	[{
+			"name":	"pve-Leela",
+			"address":	"192.168.100.10",
+			"protocol":	"ipmi"
+		}, {
+			"name":	"test",
+			"address":	"192.168.100.2",
+			"protocol":	"ipmi"
+		}]
 }

@@ -574,19 +574,26 @@ int tui_run(void)
 
         case TERMINAL_KEY_TAB:
             /*
-             * Workspace handles whether Tab
-             * actually changes focus.
-             */
-            ui_workspace_toggle_focus(
-                &workspace
-            );
+            * Tab changes pane focus only when a split
+            * workspace is actually active.
+            *
+            * Otherwise allow the key to pass through
+            * to the active screen.
+            */
+            if (workspace.split_active) {
+                ui_workspace_toggle_focus(
+                    &workspace
+                );
 
-            draw_screen(
-                &workspace
-            );
+                draw_screen(
+                    &workspace
+                );
 
-            continue;
+                continue;
+            }
 
+            break;
+        
         case TERMINAL_KEY_ESCAPE:
             /*
              * Nodes has an internal detail view.
@@ -645,7 +652,7 @@ int tui_run(void)
          *
          * Later this should move into a proper
          * command/key binding system.
-         */
+         *//*
         if (
             key == 's' ||
             key == 'S'
@@ -659,7 +666,7 @@ int tui_run(void)
             );
 
             continue;
-        }
+        }*/
 
         /*
          * Route normal input to whichever pane
