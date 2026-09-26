@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,65 +6,83 @@
 
 #include <cjson/cJSON.h>
 
-#include "hrmcli/node.h"
 #include "hrmcli/node_config.h"
 
 
-static char *read_file(const char *path)
+static NodeConfigStatus read_file(
+    const char *path,
+    char **buffer
+)
 {
     FILE *file;
-    char *buffer;
-
     long size;
     size_t bytes_read;
+    char *data;
+
+    if (
+        path == NULL ||
+        buffer == NULL
+    ) {
+        return NODE_CONFIG_INVALID_ARGUMENT;
+    }
+
+    *buffer = NULL;
 
     file = fopen(path, "rb");
 
     if (file == NULL) {
-        return NULL;
+        if (errno == ENOENT) {
+            return NODE_CONFIG_FILE_NOT_FOUND;
+        }
+
+        return NODE_CONFIG_FILE_READ_ERROR;
     }
 
     if (fseek(file, 0, SEEK_END) != 0) {
         fclose(file);
-        return NULL;
+        return NODE_CONFIG_FILE_READ_ERROR;
     }
 
     size = ftell(file);
 
     if (size < 0) {
         fclose(file);
-        return NULL;
+        return NODE_CONFIG_FILE_READ_ERROR;
     }
 
-    if (fseek(file, 0, SEEK_SET) != 0) {
-        fclose(file);
-        return NULL;
-    }
+    rewind(file);
 
-    buffer = malloc((size_t)size + 1);
+    data = malloc((size_t)size + 1);
 
-    if (buffer == NULL) {
+    if (data == NULL) {
         fclose(file);
-        return NULL;
+        return NODE_CONFIG_FILE_READ_ERROR;
     }
 
     bytes_read = fread(
-        buffer,
+        data,
         1,
         (size_t)size,
         file
     );
 
-    fclose(file);
+    if (
+        bytes_read != (size_t)size &&
+        ferror(file)
+    ) {
+        free(data);
+        fclose(file);
 
-    if (bytes_read != (size_t)size) {
-        free(buffer);
-        return NULL;
+        return NODE_CONFIG_FILE_READ_ERROR;
     }
 
-    buffer[size] = '\0';
+    data[bytes_read] = '\0';
 
-    return buffer;
+    fclose(file);
+
+    *buffer = data;
+
+    return NODE_CONFIG_OK;
 }
 
 
@@ -93,44 +112,69 @@ static int parse_protocol(
 }
 
 
-int node_config_load(
+NodeConfigStatus node_config_load(
     const char *path,
     Node *nodes,
     int max_nodes,
     int *node_count
 )
 {
-    char *json_text;
+    char *json_data;
 
     cJSON *root;
     cJSON *node_array;
-    cJSON *item;
+    cJSON *entry;
 
     int count = 0;
+    int invalid_node_found = 0;
+    int too_many_nodes = 0;
+
+    NodeConfigStatus status;
 
     if (
         path == NULL ||
         nodes == NULL ||
-        node_count == NULL ||
-        max_nodes <= 0
+        max_nodes <= 0 ||
+        node_count == NULL
     ) {
-        return -1;
+        return NODE_CONFIG_INVALID_ARGUMENT;
     }
 
     *node_count = 0;
 
-    json_text = read_file(path);
+    /*
+     * Read the configuration file.
+     */
+    status = read_file(
+        path,
+        &json_data
+    );
 
-    if (json_text == NULL) {
-        return -1;
+    if (status != NODE_CONFIG_OK) {
+        return status;
     }
 
-    root = cJSON_Parse(json_text);
+    /*
+     * Parse the JSON document.
+     */
+    root = cJSON_Parse(json_data);
 
-    free(json_text);
+    free(json_data);
 
     if (root == NULL) {
-        return -1;
+        return NODE_CONFIG_PARSE_ERROR;
+    }
+
+    /*
+     * Expected format:
+     *
+     * {
+     *     "nodes": [...]
+     * }
+     */
+    if (!cJSON_IsObject(root)) {
+        cJSON_Delete(root);
+        return NODE_CONFIG_INVALID_ROOT;
     }
 
     node_array = cJSON_GetObjectItemCaseSensitive(
@@ -140,89 +184,117 @@ int node_config_load(
 
     if (!cJSON_IsArray(node_array)) {
         cJSON_Delete(root);
-        return -1;
+        return NODE_CONFIG_INVALID_ROOT;
     }
 
-    cJSON_ArrayForEach(item, node_array) {
+    /*
+     * Parse each configured node.
+     */
+    cJSON_ArrayForEach(entry, node_array) {
         cJSON *name;
         cJSON *address;
-        cJSON *protocol_json;
+        cJSON *protocol;
 
-        NodeProtocol protocol;
-        Node *node;
+        NodeProtocol parsed_protocol;
 
-        if (count >= max_nodes) {
-            break;
-        }
-
-        if (!cJSON_IsObject(item)) {
+        if (!cJSON_IsObject(entry)) {
+            invalid_node_found = 1;
             continue;
         }
 
         name = cJSON_GetObjectItemCaseSensitive(
-            item,
+            entry,
             "name"
         );
 
         address = cJSON_GetObjectItemCaseSensitive(
-            item,
+            entry,
             "address"
         );
 
-        protocol_json = cJSON_GetObjectItemCaseSensitive(
-            item,
+        protocol = cJSON_GetObjectItemCaseSensitive(
+            entry,
             "protocol"
         );
 
+        /*
+         * Required fields must all be strings.
+         */
         if (
             !cJSON_IsString(name) ||
             !cJSON_IsString(address) ||
-            !cJSON_IsString(protocol_json)
+            !cJSON_IsString(protocol)
         ) {
+            invalid_node_found = 1;
+            continue;
+        }
+
+        /*
+         * Required strings may not be empty.
+         */
+        if (
+            name->valuestring[0] == '\0' ||
+            address->valuestring[0] == '\0' ||
+            protocol->valuestring[0] == '\0'
+        ) {
+            invalid_node_found = 1;
+            continue;
+        }
+
+        /*
+         * Reject values that do not fit into
+         * the fixed-size Node structure rather
+         * than silently truncating them.
+         */
+        if (
+            strlen(name->valuestring) >= NODE_NAME_MAX ||
+            strlen(address->valuestring) >= NODE_ADDRESS_MAX
+        ) {
+            invalid_node_found = 1;
             continue;
         }
 
         if (
             parse_protocol(
-                protocol_json->valuestring,
-                &protocol
+                protocol->valuestring,
+                &parsed_protocol
             ) != 0
         ) {
+            invalid_node_found = 1;
             continue;
         }
 
-        node = &nodes[count];
-
-        memset(
-            node,
-            0,
-            sizeof(*node)
-        );
+        /*
+         * Continue validating entries even after
+         * reaching capacity, but do not store
+         * additional nodes.
+         */
+        if (count >= max_nodes) {
+            too_many_nodes = 1;
+            continue;
+        }
 
         snprintf(
-            node->name,
-            sizeof(node->name),
+            nodes[count].name,
+            sizeof(nodes[count].name),
             "%s",
             name->valuestring
         );
 
         snprintf(
-            node->address,
-            sizeof(node->address),
+            nodes[count].address,
+            sizeof(nodes[count].address),
             "%s",
             address->valuestring
         );
 
-        node->protocol = protocol;
+        nodes[count].protocol =
+            parsed_protocol;
 
-        /*
-         * Runtime BMC information has not yet
-         * been queried.
-         */
-        node->status =
+        nodes[count].status =
             NODE_STATUS_UNKNOWN;
 
-        node->power =
+        nodes[count].power =
             NODE_POWER_UNKNOWN;
 
         count++;
@@ -232,5 +304,53 @@ int node_config_load(
 
     *node_count = count;
 
-    return 0;
+    /*
+     * These are warning conditions rather than
+     * complete load failures. Valid nodes have
+     * still been returned to the caller.
+     */
+    if (too_many_nodes) {
+        return NODE_CONFIG_TOO_MANY_NODES;
+    }
+
+    if (invalid_node_found) {
+        return NODE_CONFIG_INVALID_NODE;
+    }
+
+    return NODE_CONFIG_OK;
+}
+
+
+const char *node_config_status_string(
+    NodeConfigStatus status
+)
+{
+    switch (status) {
+    case NODE_CONFIG_OK:
+        return "OK";
+
+    case NODE_CONFIG_FILE_NOT_FOUND:
+        return "File not found";
+
+    case NODE_CONFIG_FILE_READ_ERROR:
+        return "File read error";
+
+    case NODE_CONFIG_PARSE_ERROR:
+        return "JSON parse error";
+
+    case NODE_CONFIG_INVALID_ROOT:
+        return "Invalid JSON structure";
+
+    case NODE_CONFIG_INVALID_NODE:
+        return "Invalid node entry";
+
+    case NODE_CONFIG_TOO_MANY_NODES:
+        return "Too many nodes";
+
+    case NODE_CONFIG_INVALID_ARGUMENT:
+        return "Invalid argument";
+
+    default:
+        return "Unknown error";
+    }
 }

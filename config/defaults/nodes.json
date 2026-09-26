@@ -1,14 +1,13 @@
 {
   "nodes": [
     {
-      "name": "pve-Atlas",
-      "address": "172.16.1.1",
+      "name": "pve-Leela",
+      "address": "192.168.100.10",
       "protocol": "ipmi"
     },
     {
-      "name": "Nat",
-      "address": "172.16.1.2",
-      "protocol": "redfish"
+      "name": "Tycho",
+      "address": "192.168.100.12"
     }
   ]
 }

@@ -12,6 +12,8 @@ void screen_nodes_init(
     NodesScreenState *state
 )
 {
+    NodeConfigStatus status;
+
     if (state == NULL) {
         return;
     }
@@ -25,20 +27,31 @@ void screen_nodes_init(
     state->selected = 0;
     state->view = NODES_VIEW_LIST;
 
-    if (
-        node_config_load(
-            hrmcli_nodes_path(),
-            state->nodes,
-            NODES_SCREEN_MAX_NODES,
-            &state->node_count
-        ) != 0
-    ) {
-        state->load_failed = 1;
-        state->node_count = 0;
-        return;
-    }
+    status = node_config_load(
+        hrmcli_nodes_path(),
+        state->nodes,
+        NODES_SCREEN_MAX_NODES,
+        &state->node_count
+    );
 
-    state->load_failed = 0;
+    switch (status) {
+    case NODE_CONFIG_OK:
+    case NODE_CONFIG_INVALID_NODE:
+    case NODE_CONFIG_TOO_MANY_NODES:
+        /*
+         * Configuration contained usable node data.
+         */
+        state->load_failed = 0;
+        break;
+
+    default:
+        /*
+         * Configuration could not be used.
+         */
+        state->node_count = 0;
+        state->load_failed = 1;
+        break;
+    }
 }
 
 

@@ -163,12 +163,13 @@ static void check_node_configuration(
     Node nodes[STARTUP_NODE_TEST_MAX];
 
     int node_count = 0;
-    int result;
 
     int config_index;
     int nodes_index;
 
     char message[STARTUP_CHECK_MESSAGE_MAX];
+
+    NodeConfigStatus result;
 
     const char *path = hrmcli_nodes_path();
 
@@ -186,11 +187,45 @@ static void check_node_configuration(
         &node_count
     );
 
-    if (result != 0) {
+    switch (result) {
+    case NODE_CONFIG_OK:
+        startup_finish_check(
+            state,
+            config_index,
+            STARTUP_STATUS_OK,
+            path,
+            progress,
+            userdata
+        );
+        break;
+
+    case NODE_CONFIG_INVALID_NODE:
+        startup_finish_check(
+            state,
+            config_index,
+            STARTUP_STATUS_WARN,
+            "One or more invalid node entries were ignored",
+            progress,
+            userdata
+        );
+        break;
+
+    case NODE_CONFIG_TOO_MANY_NODES:
+        startup_finish_check(
+            state,
+            config_index,
+            STARTUP_STATUS_WARN,
+            "Node limit exceeded; extra entries were ignored",
+            progress,
+            userdata
+        );
+        break;
+
+    case NODE_CONFIG_FILE_NOT_FOUND:
         snprintf(
             message,
             sizeof(message),
-            "Unable to load %s",
+            "File not found: %s",
             path
         );
 
@@ -220,17 +255,132 @@ static void check_node_configuration(
         );
 
         return;
+
+    case NODE_CONFIG_FILE_READ_ERROR:
+        snprintf(
+            message,
+            sizeof(message),
+            "Unable to read: %s",
+            path
+        );
+
+        startup_finish_check(
+            state,
+            config_index,
+            STARTUP_STATUS_WARN,
+            message,
+            progress,
+            userdata
+        );
+
+        nodes_index = startup_begin_check(
+            state,
+            "Managed nodes",
+            progress,
+            userdata
+        );
+
+        startup_finish_check(
+            state,
+            nodes_index,
+            STARTUP_STATUS_WARN,
+            "Node count unavailable",
+            progress,
+            userdata
+        );
+
+        return;
+
+    case NODE_CONFIG_PARSE_ERROR:
+        startup_finish_check(
+            state,
+            config_index,
+            STARTUP_STATUS_WARN,
+            "JSON parse error",
+            progress,
+            userdata
+        );
+
+        nodes_index = startup_begin_check(
+            state,
+            "Managed nodes",
+            progress,
+            userdata
+        );
+
+        startup_finish_check(
+            state,
+            nodes_index,
+            STARTUP_STATUS_WARN,
+            "Node count unavailable",
+            progress,
+            userdata
+        );
+
+        return;
+
+    case NODE_CONFIG_INVALID_ROOT:
+        startup_finish_check(
+            state,
+            config_index,
+            STARTUP_STATUS_WARN,
+            "Invalid JSON structure",
+            progress,
+            userdata
+        );
+
+        nodes_index = startup_begin_check(
+            state,
+            "Managed nodes",
+            progress,
+            userdata
+        );
+
+        startup_finish_check(
+            state,
+            nodes_index,
+            STARTUP_STATUS_WARN,
+            "Node count unavailable",
+            progress,
+            userdata
+        );
+
+        return;
+
+    case NODE_CONFIG_INVALID_ARGUMENT:
+    default:
+        startup_finish_check(
+            state,
+            config_index,
+            STARTUP_STATUS_WARN,
+            node_config_status_string(result),
+            progress,
+            userdata
+        );
+
+        nodes_index = startup_begin_check(
+            state,
+            "Managed nodes",
+            progress,
+            userdata
+        );
+
+        startup_finish_check(
+            state,
+            nodes_index,
+            STARTUP_STATUS_WARN,
+            "Node count unavailable",
+            progress,
+            userdata
+        );
+
+        return;
     }
 
-    startup_finish_check(
-        state,
-        config_index,
-        STARTUP_STATUS_OK,
-        path,
-        progress,
-        userdata
-    );
-
+    /*
+     * If we got here, the config was usable,
+     * even if one or more entries were skipped.
+     */
     nodes_index = startup_begin_check(
         state,
         "Managed nodes",
@@ -268,7 +418,6 @@ static void check_node_configuration(
         userdata
     );
 }
-
 
 void startup_init(
     StartupState *state
