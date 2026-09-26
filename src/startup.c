@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "hrmcli/node.h"
 #include "hrmcli/node_config.h"
@@ -141,6 +142,107 @@ static void check_data_directory(
         message,
         sizeof(message),
         "Not present yet: %s",
+        path
+    );
+
+    startup_finish_check(
+        state,
+        index,
+        STARTUP_STATUS_WARN,
+        message,
+        progress,
+        userdata
+    );
+}
+
+static void check_log_directory(
+    StartupState *state,
+    StartupProgressFn progress,
+    void *userdata
+)
+{
+    struct stat info;
+    char message[STARTUP_CHECK_MESSAGE_MAX];
+
+    const char *path = hrmcli_log_dir();
+
+    int index = startup_begin_check(
+        state,
+        "Log directory",
+        progress,
+        userdata
+    );
+
+    if (
+        stat(path, &info) == 0 &&
+        S_ISDIR(info.st_mode)
+    ) {
+        startup_finish_check(
+            state,
+            index,
+            STARTUP_STATUS_OK,
+            path,
+            progress,
+            userdata
+        );
+
+        return;
+    }
+
+    snprintf(
+        message,
+        sizeof(message),
+        "Not present yet: %s",
+        path
+    );
+
+    startup_finish_check(
+        state,
+        index,
+        STARTUP_STATUS_WARN,
+        message,
+        progress,
+        userdata
+    );
+}
+
+static void check_directory_writable(
+    StartupState *state,
+    const char *name,
+    const char *path,
+    StartupProgressFn progress,
+    void *userdata
+)
+{
+    int index;
+    char message[STARTUP_CHECK_MESSAGE_MAX];
+
+    index = startup_begin_check(
+        state,
+        name,
+        progress,
+        userdata
+    );
+
+    if (
+        access(path, W_OK | X_OK) == 0
+    ) {
+        startup_finish_check(
+            state,
+            index,
+            STARTUP_STATUS_OK,
+            path,
+            progress,
+            userdata
+        );
+
+        return;
+    }
+
+    snprintf(
+        message,
+        sizeof(message),
+        "Not writable: %s",
         path
     );
 
@@ -434,7 +536,6 @@ void startup_init(
     );
 }
 
-
 void startup_run_checks(
     StartupState *state,
     StartupProgressFn progress,
@@ -451,6 +552,28 @@ void startup_run_checks(
 
     check_data_directory(
         state,
+        progress,
+        userdata
+    );
+
+    check_directory_writable(
+        state,
+        "Data directory writable",
+        hrmcli_data_dir(),
+        progress,
+        userdata
+    );
+
+    check_log_directory(
+        state,
+        progress,
+        userdata
+    );
+
+    check_directory_writable(
+        state,
+        "Log directory writable",
+        hrmcli_log_dir(),
         progress,
         userdata
     );
