@@ -11,7 +11,9 @@
 typedef enum {
     NODES_VIEW_LIST,
     NODES_VIEW_DETAIL,
-    NODES_VIEW_ADD
+    NODES_VIEW_ADD,
+    NODES_VIEW_EDIT,
+    NODES_VIEW_REMOVE_CONFIRM
 } NodesView;
 
 

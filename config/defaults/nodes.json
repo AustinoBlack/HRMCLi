@@ -1,11 +1,7 @@
 {
 	"nodes":	[{
-			"name":	"pve-Leela",
-			"address":	"192.168.100.10",
-			"protocol":	"ipmi"
-		}, {
-			"name":	"test",
-			"address":	"192.168.100.2",
+			"name":	"Rack Manager",
+			"address":	"172.16.0.1",
 			"protocol":	"ipmi"
 		}]
 }
