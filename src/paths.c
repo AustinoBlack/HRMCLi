@@ -15,3 +15,8 @@ const char *hrmcli_log_dir(void)
 {
     return "/var/log/hrmcli";
 }
+
+const char *hrmcli_serial_config_path(void)
+{
+    return "config/defaults/serial.json";
+}

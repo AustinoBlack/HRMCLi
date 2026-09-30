@@ -21,6 +21,7 @@ SRC := \
 	src/paths.c\
 	src/startup.c \
 	src/log.c \
+	src/serial.c \
 	src/node.c \
 	src/node_config.c \
 	src/terminal.c \

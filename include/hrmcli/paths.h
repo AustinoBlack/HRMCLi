@@ -7,4 +7,6 @@ const char *hrmcli_data_dir(void);
 
 const char *hrmcli_log_dir(void);
 
+const char *hrmcli_serial_config_path(void);
+
 #endif
