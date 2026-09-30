@@ -1,6 +1,6 @@
 {
 	"nodes":	[{
-			"name":	"Rack Manager",
+			"name":	"Test",
 			"address":	"172.16.0.1",
 			"protocol":	"ipmi"
 		}]

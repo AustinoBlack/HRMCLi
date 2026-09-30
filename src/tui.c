@@ -45,13 +45,6 @@ typedef struct {
 } StartupDisplayContext;
 
 
-/*
- * Called by startup.c whenever a startup check
- * begins or finishes.
- *
- * This redraws the startup screen so checks
- * visibly progress one at a time.
- */
 static void startup_progress(
     const StartupState *state,
     void *userdata
@@ -70,6 +63,17 @@ static void startup_progress(
         return;
     }
 
+    /*
+     * Render startup through the same buffered
+     * terminal path used by the normal TUI.
+     *
+     * This allows terminal_present() to update
+     * only the startup cells that actually changed.
+     */
+    if (terminal_begin_frame() != 0) {
+        return;
+    }
+
     terminal_clear();
 
     ui_pane_draw_frame(
@@ -80,6 +84,8 @@ static void startup_progress(
         context->pane,
         (StartupState *)state
     );
+
+    terminal_present();
 
     /*
      * Most checks complete almost instantly.
@@ -423,18 +429,24 @@ static void handle_primary_pane_key(
     }
 }
 
-
 static void draw_screen(
     UiWorkspace *workspace
 )
 {
+    if (
+        terminal_begin_frame() != 0
+    ) {
+        return;
+    }
+
     terminal_clear();
 
     ui_workspace_draw(
         workspace
     );
-}
 
+    terminal_present();
+}
 
 int tui_run(void)
 {

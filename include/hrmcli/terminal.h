@@ -43,4 +43,15 @@ int terminal_read_key(void);
 
 void terminal_set_reverse(int enabled);
 
+/*
+ * Buffered frame rendering.
+ *
+ * During an active frame, drawing operations are written
+ * into an in-memory screen buffer instead of directly to
+ * the physical terminal.
+ */
+int terminal_begin_frame(void);
+void terminal_present(void);
+void terminal_invalidate(void);
+
 #endif

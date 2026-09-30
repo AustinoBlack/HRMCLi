@@ -32,6 +32,23 @@ static int sighup_installed = 0;
 static int sigint_installed = 0;
 static int sigquit_installed = 0;
 
+typedef struct {
+    char ch;
+    unsigned char reverse;
+} TerminalCell;
+
+static TerminalCell *front_buffer = NULL;
+static TerminalCell *back_buffer = NULL;
+
+static int frame_rows = 0;
+static int frame_cols = 0;
+
+static int frame_active = 0;
+static int front_valid = 0;
+
+static int virtual_row = 1;
+static int virtual_col = 1;
+static int virtual_reverse = 0;
 
 static void write_all(const char *data, size_t length)
 {
@@ -156,6 +173,103 @@ static void restore_signal_handlers(void)
     }
 }
 
+static void clear_buffer(
+    TerminalCell *buffer,
+    int rows,
+    int cols
+)
+{
+    int count;
+
+    if (
+        buffer == NULL ||
+        rows <= 0 ||
+        cols <= 0
+    ) {
+        return;
+    }
+
+    count = rows * cols;
+
+    for (int i = 0; i < count; i++) {
+        buffer[i].ch = ' ';
+        buffer[i].reverse = 0;
+    }
+}
+
+
+static int resize_frame_buffers(
+    int rows,
+    int cols
+)
+{
+    TerminalCell *new_front;
+    TerminalCell *new_back;
+    size_t size;
+
+    if (
+        rows <= 0 ||
+        cols <= 0
+    ) {
+        return -1;
+    }
+
+    /*
+     * Nothing to do if the existing buffers already
+     * match the terminal dimensions.
+     */
+    if (
+        front_buffer != NULL &&
+        back_buffer != NULL &&
+        frame_rows == rows &&
+        frame_cols == cols
+    ) {
+        return 0;
+    }
+
+    size =
+        (size_t)rows *
+        (size_t)cols *
+        sizeof(TerminalCell);
+
+    new_front = malloc(size);
+
+    if (new_front == NULL) {
+        return -1;
+    }
+
+    new_back = malloc(size);
+
+    if (new_back == NULL) {
+        free(new_front);
+        return -1;
+    }
+
+    free(front_buffer);
+    free(back_buffer);
+
+    front_buffer = new_front;
+    back_buffer = new_back;
+
+    frame_rows = rows;
+    frame_cols = cols;
+
+    clear_buffer(
+        front_buffer,
+        frame_rows,
+        frame_cols
+    );
+
+    clear_buffer(
+        back_buffer,
+        frame_rows,
+        frame_cols
+    );
+
+    front_valid = 0;
+
+    return 0;
+}
 
 int terminal_init(void)
 {
@@ -319,6 +433,13 @@ failure:
 
 void terminal_set_reverse(int enabled)
 {
+    if (frame_active) {
+        virtual_reverse =
+            enabled ? 1 : 0;
+
+        return;
+    }
+
     if (enabled) {
         terminal_write("\x1b[7m");
     } else {
@@ -352,6 +473,18 @@ void terminal_shutdown(void)
     resize_pending = 0;
     termination_pending = 0;
     pushed_byte = -1;
+
+    free(front_buffer);
+    free(back_buffer);
+
+    front_buffer = NULL;
+    back_buffer = NULL;
+
+    frame_rows = 0;
+    frame_cols = 0;
+
+    frame_active = 0;
+    front_valid = 0;
 
     terminal_active = 0;
 }
@@ -388,13 +521,24 @@ int terminal_get_size(TerminalSize *size)
     return 0;
 }
 
-
 void terminal_clear(void)
 {
+    if (frame_active) {
+        clear_buffer(
+            back_buffer,
+            frame_rows,
+            frame_cols
+        );
+
+        virtual_row = 1;
+        virtual_col = 1;
+
+        return;
+    }
+
     terminal_write("\x1b[2J");
     terminal_write("\x1b[H");
 }
-
 
 void terminal_move_cursor(int row, int col)
 {
@@ -407,6 +551,13 @@ void terminal_move_cursor(int row, int col)
 
     if (col < 1) {
         col = 1;
+    }
+
+    if (frame_active) {
+        virtual_row = row;
+        virtual_col = col;
+
+        return;
     }
 
     length = snprintf(
@@ -425,7 +576,6 @@ void terminal_move_cursor(int row, int col)
     }
 }
 
-
 void terminal_hide_cursor(void)
 {
     terminal_write("\x1b[?25l");
@@ -440,14 +590,77 @@ void terminal_show_cursor(void)
 
 void terminal_write(const char *text)
 {
+    const unsigned char *cursor;
+
     if (text == NULL) {
         return;
     }
 
-    write_all(
-        text,
-        strlen(text)
-    );
+    if (!frame_active) {
+        write_all(
+            text,
+            strlen(text)
+        );
+
+        return;
+    }
+
+    cursor =
+        (const unsigned char *)text;
+
+    while (*cursor != '\0') {
+        unsigned char ch;
+
+        ch = *cursor++;
+
+        /*
+         * Basic control-character handling.
+         */
+        if (ch == '\n') {
+            virtual_row++;
+            virtual_col = 1;
+            continue;
+        }
+
+        if (ch == '\r') {
+            virtual_col = 1;
+            continue;
+        }
+
+        if (ch == '\t') {
+            virtual_col +=
+                8 - ((virtual_col - 1) % 8);
+
+            continue;
+        }
+
+        /*
+         * Ignore anything outside the current
+         * virtual screen.
+         */
+        if (
+            virtual_row < 1 ||
+            virtual_row > frame_rows ||
+            virtual_col < 1 ||
+            virtual_col > frame_cols
+        ) {
+            virtual_col++;
+            continue;
+        }
+
+        back_buffer[
+            ((virtual_row - 1) * frame_cols) +
+            (virtual_col - 1)
+        ].ch = (char)ch;
+
+        back_buffer[
+            ((virtual_row - 1) * frame_cols) +
+            (virtual_col - 1)
+        ].reverse =
+            (unsigned char)virtual_reverse;
+
+        virtual_col++;
+    }
 }
 
 
@@ -803,4 +1016,307 @@ int terminal_read_key(void)
     pushed_byte = second;
 
     return TERMINAL_KEY_ESCAPE;
+}
+
+int terminal_begin_frame(void)
+{
+    TerminalSize size;
+
+    if (
+        terminal_get_size(&size) != 0
+    ) {
+        return -1;
+    }
+
+    if (
+        resize_frame_buffers(
+            size.rows,
+            size.cols
+        ) != 0
+    ) {
+        return -1;
+    }
+
+    clear_buffer(
+        back_buffer,
+        frame_rows,
+        frame_cols
+    );
+
+    virtual_row = 1;
+    virtual_col = 1;
+    virtual_reverse = 0;
+
+    frame_active = 1;
+
+    return 0;
+}
+
+void terminal_present(void)
+{
+    int current_reverse = 0;
+
+    if (
+        !frame_active ||
+        back_buffer == NULL ||
+        front_buffer == NULL
+    ) {
+        return;
+    }
+
+    /*
+     * From this point onward, writes go directly
+     * to the physical terminal.
+     */
+    frame_active = 0;
+
+    /*
+     * If the front buffer is invalid, we do one
+     * complete physical redraw to establish a known
+     * terminal state.
+     */
+    if (!front_valid) {
+        write_all(
+            "\x1b[2J\x1b[H",
+            7
+        );
+
+        for (int row = 0; row < frame_rows; row++) {
+            char sequence[32];
+            int length;
+
+            length = snprintf(
+                sequence,
+                sizeof(sequence),
+                "\x1b[%d;1H",
+                row + 1
+            );
+
+            if (length > 0) {
+                write_all(
+                    sequence,
+                    (size_t)length
+                );
+            }
+
+            for (int col = 0; col < frame_cols; col++) {
+                TerminalCell *cell;
+
+                cell =
+                    &back_buffer[
+                        (row * frame_cols) + col
+                    ];
+
+                if (
+                    cell->reverse !=
+                    current_reverse
+                ) {
+                    if (cell->reverse) {
+                        write_all(
+                            "\x1b[7m",
+                            4
+                        );
+                    } else {
+                        write_all(
+                            "\x1b[27m",
+                            5
+                        );
+                    }
+
+                    current_reverse =
+                        cell->reverse;
+                }
+
+                write_all(
+                    &cell->ch,
+                    1
+                );
+            }
+        }
+
+        if (current_reverse) {
+            write_all(
+                "\x1b[27m",
+                5
+            );
+
+            current_reverse = 0;
+        }
+
+        memcpy(
+            front_buffer,
+            back_buffer,
+            (size_t)frame_rows *
+            (size_t)frame_cols *
+            sizeof(TerminalCell)
+        );
+
+        front_valid = 1;
+
+        return;
+    }
+
+    /*
+     * Normal differential update.
+     *
+     * Scan each row and emit only runs of cells
+     * that differ from the front buffer.
+     */
+    for (int row = 0; row < frame_rows; row++) {
+        int col = 0;
+
+        while (col < frame_cols) {
+            int start_col;
+
+            /*
+             * Skip unchanged cells.
+             */
+            while (
+                col < frame_cols &&
+                front_buffer[
+                    (row * frame_cols) + col
+                ].ch ==
+                back_buffer[
+                    (row * frame_cols) + col
+                ].ch &&
+                front_buffer[
+                    (row * frame_cols) + col
+                ].reverse ==
+                back_buffer[
+                    (row * frame_cols) + col
+                ].reverse
+            ) {
+                col++;
+            }
+
+            if (col >= frame_cols) {
+                break;
+            }
+
+            start_col = col;
+
+            /*
+             * Find the end of this changed run.
+             *
+             * We stop when we encounter an unchanged
+             * cell so we do not retransmit large
+             * unchanged sections of the row.
+             */
+            while (
+                col < frame_cols &&
+                (
+                    front_buffer[
+                        (row * frame_cols) + col
+                    ].ch !=
+                    back_buffer[
+                        (row * frame_cols) + col
+                    ].ch ||
+                    front_buffer[
+                        (row * frame_cols) + col
+                    ].reverse !=
+                    back_buffer[
+                        (row * frame_cols) + col
+                    ].reverse
+                )
+            ) {
+                col++;
+            }
+
+            /*
+             * Move the physical cursor to the start
+             * of the changed run.
+             */
+            {
+                char sequence[32];
+                int length;
+
+                length = snprintf(
+                    sequence,
+                    sizeof(sequence),
+                    "\x1b[%d;%dH",
+                    row + 1,
+                    start_col + 1
+                );
+
+                if (length > 0) {
+                    write_all(
+                        sequence,
+                        (size_t)length
+                    );
+                }
+            }
+
+            /*
+             * Emit the changed run.
+             */
+            for (
+                int draw_col = start_col;
+                draw_col < col;
+                draw_col++
+            ) {
+                TerminalCell *cell;
+
+                cell =
+                    &back_buffer[
+                        (row * frame_cols) +
+                        draw_col
+                    ];
+
+                if (
+                    cell->reverse !=
+                    current_reverse
+                ) {
+                    if (cell->reverse) {
+                        write_all(
+                            "\x1b[7m",
+                            4
+                        );
+                    } else {
+                        write_all(
+                            "\x1b[27m",
+                            5
+                        );
+                    }
+
+                    current_reverse =
+                        cell->reverse;
+                }
+
+                write_all(
+                    &cell->ch,
+                    1
+                );
+            }
+        }
+    }
+
+    /*
+     * Always leave the terminal in normal video
+     * after presenting a frame.
+     */
+    if (current_reverse) {
+        write_all(
+            "\x1b[27m",
+            5
+        );
+    }
+
+    /*
+     * The physical terminal now matches back_buffer,
+     * so make it the new front buffer.
+     */
+    memcpy(
+        front_buffer,
+        back_buffer,
+        (size_t)frame_rows *
+        (size_t)frame_cols *
+        sizeof(TerminalCell)
+    );
+
+    front_valid = 1;
+}
+
+void terminal_invalidate(void)
+{
+    front_valid = 0;
 }
