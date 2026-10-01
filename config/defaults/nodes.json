@@ -1,7 +1,14 @@
 {
-	"nodes":	[{
+	"nodes":	[
+        {
 			"name":	"Test",
 			"address":	"172.16.0.1",
 			"protocol":	"ipmi"
-		}]
+		},
+        {
+            "name": "Test2",
+            "address": "172.16.0.2",
+            "protocol": "ipmi"
+        }   
+    ]
 }

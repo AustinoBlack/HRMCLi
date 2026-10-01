@@ -1,7 +1,7 @@
 {
 	"serial":	{
 		"device":	"/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9SQHT7X-if00-port0",
-		"baud":	9600,
+		"baud":	115200,
 		"data_bits":	8,
 		"parity":	"none",
 		"stop_bits":	1,

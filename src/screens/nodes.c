@@ -445,7 +445,7 @@ void screen_nodes_init(
     default:
         state->node_count = 0;
         state->load_failed = 1;
-        state->load_failed = '\0';
+        state->load_warning[0] = '\0';
         break;
     }
 }
@@ -1043,21 +1043,58 @@ static void handle_node_form_key(
     if (key == TERMINAL_KEY_TAB) {
         switch (state->form.field) {
         case NODE_FORM_NAME:
-            state->form.field =
-                NODE_FORM_ADDRESS;
+            state->form.message[0] = '\0';
 
-            state->form.cursor =
-                (int)strlen(
-                    state->form.node.address
+            if (
+                key >= 32 &&
+                key <= 126 &&
+                strlen(state->form.node.name) >=
+                    NODE_NAME_MAX - 1
+            ) {
+                snprintf(
+                    state->form.message,
+                    sizeof(state->form.message),
+                    "Node name maximum length is %d characters.",
+                    NODE_NAME_MAX - 1
                 );
-            break;
+
+                break;
+            }
+
+            handle_text_field(
+                state->form.node.name,
+                NODE_NAME_MAX,
+                &state->form.cursor,
+                key
+            );
+            break; 
 
         case NODE_FORM_ADDRESS:
-            state->form.field =
-                NODE_FORM_PROTOCOL;
+            state->form.message[0] = '\0';
 
-            state->form.cursor = 0;
-            break;
+            if (
+                key >= 32 &&
+                key <= 126 &&
+                strlen(state->form.node.address) >=
+                    NODE_ADDRESS_MAX - 1
+            ) {
+                snprintf(
+                    state->form.message,
+                    sizeof(state->form.message),
+                    "BMC address maximum length is %d characters.",
+                    NODE_ADDRESS_MAX - 1
+                );
+
+                break;
+            }
+
+            handle_text_field(
+                state->form.node.address,
+                NODE_ADDRESS_MAX,
+                &state->form.cursor,
+                key
+            );
+            break; 
 
         case NODE_FORM_PROTOCOL:
             state->form.field =
