@@ -6,7 +6,7 @@
 
 #define NODES_SCREEN_MAX_NODES 16
 #define NODE_FORM_MESSAGE_MAX 128
-
+#define NODE_LOAD_WARNING_MAX 128
 
 typedef enum {
     NODES_VIEW_LIST,
@@ -45,6 +45,8 @@ typedef struct {
     NodesView view;
 
     int load_failed;
+
+    char load_warning[NODE_LOAD_WARNING_MAX];
 
     NodeFormState form;
 } NodesScreenState;

@@ -185,7 +185,7 @@ static void save_add_node(
         state->node_count - 1;
 
     state->load_failed = 0;
-
+    state->load_warning[0] = '\0';
     state->view =
         NODES_VIEW_LIST;
 }
@@ -270,7 +270,8 @@ static void save_edit_node(
 
         return;
     }
-
+    
+    state->load_warning[0] = '\0';
     state->view =
         NODES_VIEW_LIST;
 }
@@ -385,6 +386,7 @@ static void remove_selected_node(
             state->node_count - 1;
     }
 
+    state->load_warning[0] = '\0';
     state->view =
         NODES_VIEW_LIST;
 }
@@ -418,14 +420,32 @@ void screen_nodes_init(
 
     switch (status) {
     case NODE_CONFIG_OK:
+        state->load_failed = 0;
+        state->load_warning[0] = '\0';
+        break;
+    
     case NODE_CONFIG_INVALID_NODE:
+        state->load_failed = 0;
+        snprintf(
+            state->load_warning,
+            sizeof(state->load_warning),
+            "Warning: One or more invalid node entries were ignored."
+        );
+        break;
+    
     case NODE_CONFIG_TOO_MANY_NODES:
         state->load_failed = 0;
+        snprintf(
+            state->load_warning,
+            sizeof(state->load_warning),
+            "Warning: Node limit exceeded; extra entries were ignored."
+        );
         break;
 
     default:
         state->node_count = 0;
         state->load_failed = 1;
+        state->load_failed = '\0';
         break;
     }
 }
@@ -478,6 +498,14 @@ static void draw_node_list(
         return;
     }
 
+    if (state->load_warning[0] != '\0') {
+        ui_draw_text(
+            content.row + 2,
+            content.col,
+            state->load_warning
+        );
+    }
+
     if (state->node_count == 0) {
         ui_draw_centered_text(
             content.row + 3,
@@ -495,7 +523,12 @@ static void draw_node_list(
         return;
     }
 
-    row = content.row + 2;
+    row = content.row +
+    (
+        state->load_warning[0] != '\0'
+        ? 4
+        : 2
+    );
 
     for (
         int i = 0;
