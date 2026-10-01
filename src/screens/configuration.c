@@ -306,7 +306,7 @@ void screen_configuration_init(
 }
 
 
-static void cycle_available_device(
+static void cycle_present_device(
     ConfigurationScreenState *state,
     int direction
 )
@@ -528,6 +528,83 @@ void screen_configuration_draw(
         SERIAL_FIELD_DEVICE
     ) {
         ui_set_reverse(0);
+    }
+
+    /*
+    * Selected device details.
+    */
+    if (
+        state->selected_device >= 0 &&
+        state->selected_device <
+        state->device_count
+    ) {
+        SerialDevice *device =
+            &state->devices[
+                state->selected_device
+            ];
+
+        snprintf(
+            line,
+            sizeof(line),
+            "Status:       %s",
+            device->present
+                ? "Present"
+                : "Missing"
+        );
+
+        ui_draw_text(
+            row++,
+            content.col + 4,
+            line
+        );
+
+        snprintf(
+            line,
+            sizeof(line),
+            "Access:       %s",
+            device->accessible
+                ? "Accessible"
+                : "Inaccessible"
+        );
+
+        ui_draw_text(
+            row++,
+            content.col + 4,
+            line
+        );
+
+        snprintf(
+            line,
+            sizeof(line),
+            "Type:         %s%s",
+            serial_device_type_string(
+                device->type
+            ),
+            device->stable_path
+                ? " [stable]"
+                : ""
+        );
+
+        ui_draw_text(
+            row++,
+            content.col + 4,
+            line
+        );
+
+        snprintf(
+            line,
+            sizeof(line),
+            "Path:         %s",
+            device->path
+        );
+
+        ui_draw_text(
+            row++,
+            content.col + 4,
+            line
+        );
+
+        row++;
     }
 
     /*
@@ -773,14 +850,14 @@ void screen_configuration_handle_key(
     switch (state->field) {
     case SERIAL_FIELD_DEVICE:
         if (key == TERMINAL_KEY_LEFT) {
-            cycle_available_device(
+            cycle_present_device(
                 state,
                 -1
             );
         } else if (
             key == TERMINAL_KEY_RIGHT
         ) {
-            cycle_available_device(
+            cycle_present_device(
                 state,
                 1
             );
