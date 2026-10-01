@@ -13,6 +13,7 @@
 
 #include "hrmcli/serial.h"
 
+
 static const char *serial_parity_config_string(
     SerialParity parity
 )
@@ -202,6 +203,7 @@ static SerialConfigStatus serial_config_read_file(
     return SERIAL_CONFIG_OK;
 }
 
+
 void serial_config_defaults(
     SerialConfig *config
 )
@@ -223,7 +225,8 @@ void serial_config_defaults(
     config->flow_control = SERIAL_FLOW_NONE;
 }
 
-static int serial_device_is_available(
+
+static int serial_device_is_accessible(
     const char *path
 )
 {
@@ -248,6 +251,7 @@ static int serial_device_is_available(
 
     return 1;
 }
+
 
 static int add_device(
     SerialDevice *devices,
@@ -310,10 +314,23 @@ static int add_device(
     device->stable_path =
         stable_path ? 1 : 0;
 
-    device->available =
-    serial_device_is_available(
-        device->path
-    );
+    /*
+     * add_device() is only called for devices
+     * discovered by enumeration, so they are
+     * present in the current Linux device tree.
+     */
+    device->present = 1;
+
+    /*
+     * Accessible means HRMCLi can directly open
+     * the device. This is deliberately separate
+     * from presence because permissions or another
+     * process may prevent access to a valid device.
+     */
+    device->accessible =
+        serial_device_is_accessible(
+            device->path
+        );
 
     (*device_count)++;
 
@@ -576,6 +593,7 @@ const char *serial_device_type_string(
     }
 }
 
+
 SerialConfigStatus serial_config_load(
     const char *path,
     SerialConfig *config
@@ -790,6 +808,7 @@ SerialConfigStatus serial_config_load(
 
     return SERIAL_CONFIG_OK;
 }
+
 
 SerialConfigStatus serial_config_save(
     const char *path,
@@ -1009,6 +1028,7 @@ SerialConfigStatus serial_config_save(
 
     return SERIAL_CONFIG_OK;
 }
+
 
 const char *serial_config_status_string(
     SerialConfigStatus status

@@ -202,7 +202,7 @@ static void refresh_devices(
             i < state->device_count;
             i++
         ) {
-            if (state->devices[i].available) {
+            if (state->devices[i].present) {
                 selected_index = i;
                 break;
             }
@@ -294,7 +294,7 @@ void screen_configuration_init(
             i < state->device_count;
             i++
         ) {
-            if (state->devices[i].available) {
+            if (state->devices[i].present) {
                 state->selected_device = i;
                 break;
             }
@@ -343,7 +343,7 @@ static void cycle_available_device(
         }
 
         if (
-            state->devices[index].available
+            state->devices[index].present
         ) {
             state->selected_device =
                 index;
@@ -404,7 +404,7 @@ static void save_configuration(
         snprintf(
             state->message,
             sizeof(state->message),
-            "No usable serial device selected."
+            "No serial device selected."
         );
 
         return;

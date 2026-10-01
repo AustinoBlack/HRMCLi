@@ -548,7 +548,7 @@ static void check_serial_console(
     SerialDevice devices[SERIAL_MAX_DEVICES];
 
     int device_count = 0;
-    int configured_available = 0;
+    int configured_present = 0;
 
     int index;
 
@@ -652,18 +652,18 @@ static void check_serial_console(
                 config.device
             ) == 0
         ) {
-            configured_available =
-                devices[i].available;
+            configured_present =
+                devices[i].present;
 
             break;
         }
     }
 
-    if (!configured_available) {
+    if (!configured_present) {
         snprintf(
             message,
             sizeof(message),
-            "Configured device unavailable: %.80s",
+            "Configured device not present: %.80s",
             config.device
         );
 

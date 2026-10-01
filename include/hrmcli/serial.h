@@ -19,7 +19,8 @@ typedef struct {
     SerialDeviceType type;
 
     int stable_path;
-    int available;
+    int present;
+    int accessible; /*avaiable -> accessible Clearer terminology*/
 } SerialDevice;
 
 typedef enum {

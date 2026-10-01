@@ -2,6 +2,7 @@
 
 #include "hrmcli/serial.h"
 
+
 int main(void)
 {
     SerialDevice devices[SERIAL_MAX_DEVICES];
@@ -24,18 +25,21 @@ int main(void)
 
     for (int i = 0; i < count; i++) {
         printf(
-            "%-5s %-6s %-11s %s\n",
+            "%-5s %-6s %-8s %-12s %s\n",
             serial_device_type_string(
                 devices[i].type
             ),
             devices[i].stable_path
                 ? "stable"
                 : "direct",
-            devices[i].available
-                ? "available"
-                : "unavailable",
+            devices[i].present
+                ? "present"
+                : "missing",
+            devices[i].accessible
+                ? "accessible"
+                : "inaccessible",
             devices[i].path
-        ); 
+        );
     }
 
     return 0;
