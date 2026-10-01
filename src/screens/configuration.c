@@ -105,6 +105,119 @@ static int find_configured_device(
     return -1;
 }
 
+static void refresh_devices(
+    ConfigurationScreenState *state
+)
+{
+    char selected_path[SERIAL_DEVICE_PATH_MAX];
+    int selected_index = -1;
+
+    if (state == NULL) {
+        return;
+    }
+
+    /*
+     * Remember the currently selected device by
+     * path before rebuilding the device list.
+     */
+    selected_path[0] = '\0';
+
+    if (
+        state->selected_device >= 0 &&
+        state->selected_device < state->device_count
+    ) {
+        snprintf(
+            selected_path,
+            sizeof(selected_path),
+            "%s",
+            state->devices[
+                state->selected_device
+            ].path
+        );
+    }
+
+    /*
+     * Rebuild the device list.
+     */
+    if (
+        serial_enumerate(
+            state->devices,
+            SERIAL_MAX_DEVICES,
+            &state->device_count
+        ) != 0
+    ) {
+        state->device_count = 0;
+        state->selected_device = -1;
+
+        snprintf(
+            state->message,
+            sizeof(state->message),
+            "Failed to enumerate serial devices."
+        );
+
+        return;
+    }
+
+    /*
+     * Prefer the configured device whenever it
+     * is present.
+     *
+     * This allows a configured USB serial device
+     * to become selected again after reconnecting.
+     */
+    selected_index =
+        find_configured_device(state);
+
+    /*
+     * If the configured device is not present,
+     * preserve the previous selection if possible.
+     */
+    if (
+        selected_index < 0 &&
+        selected_path[0] != '\0'
+    ) {
+        for (
+            int i = 0;
+            i < state->device_count;
+            i++
+        ) {
+            if (
+                strcmp(
+                    state->devices[i].path,
+                    selected_path
+                ) == 0
+            ) {
+                selected_index = i;
+                break;
+            }
+        }
+    }
+
+    /*
+     * Otherwise select the first usable device.
+     */
+    if (selected_index < 0) {
+        for (
+            int i = 0;
+            i < state->device_count;
+            i++
+        ) {
+            if (state->devices[i].available) {
+                selected_index = i;
+                break;
+            }
+        }
+    }
+
+    state->selected_device =
+        selected_index;
+
+    snprintf(
+        state->message,
+        sizeof(state->message),
+        "Serial devices refreshed."
+    );
+}
 
 void screen_configuration_init(
     ConfigurationScreenState *state
@@ -610,7 +723,7 @@ void screen_configuration_draw(
         content.row +
         content.height - 1,
         content.col,
-        "Tab Next   Left/Right Change   Enter Save   Esc Back"
+        "Tab Next   Left/Right Change   R Refresh   Enter Save   Esc Back"
     );
 }
 
@@ -621,6 +734,17 @@ void screen_configuration_handle_key(
 )
 {
     if (state == NULL) {
+        return;
+    }
+
+    if (
+        key == 'r' ||
+        key == 'R'
+    ) {
+        refresh_devices(
+            state
+        );
+
         return;
     }
 
