@@ -9,7 +9,7 @@
 #include "hrmcli/node_config.h"
 #include "hrmcli/paths.h"
 #include "hrmcli/startup.h"
-
+#include "hrmcli/serial.h"
 
 #define STARTUP_NODE_TEST_MAX 64
 
@@ -536,6 +536,167 @@ void startup_init(
     );
 }
 
+static void check_serial_console(
+    StartupState *state,
+    StartupProgressFn progress,
+    void *userdata
+)
+{
+    SerialConfig config;
+    SerialConfigStatus status;
+
+    SerialDevice devices[SERIAL_MAX_DEVICES];
+
+    int device_count = 0;
+    int configured_available = 0;
+
+    int index;
+
+    char message[STARTUP_CHECK_MESSAGE_MAX];
+
+    const char *path =
+        hrmcli_serial_config_path();
+
+    index = startup_begin_check(
+        state,
+        "Serial console",
+        progress,
+        userdata
+    );
+
+    status = serial_config_load(
+        path,
+        &config
+    );
+
+    switch (status) {
+    case SERIAL_CONFIG_FILE_NOT_FOUND:
+        startup_finish_check(
+            state,
+            index,
+            STARTUP_STATUS_WARN,
+            "Serial console not configured",
+            progress,
+            userdata
+        );
+
+        return;
+
+    case SERIAL_CONFIG_OK:
+        break;
+
+    default:
+        snprintf(
+            message,
+            sizeof(message),
+            "%s",
+            serial_config_status_string(status)
+        );
+
+        startup_finish_check(
+            state,
+            index,
+            STARTUP_STATUS_WARN,
+            message,
+            progress,
+            userdata
+        );
+
+        return;
+    }
+
+    /*
+     * An empty device path is valid config data,
+     * but means the console has not been selected yet.
+     */
+    if (config.device[0] == '\0') {
+        startup_finish_check(
+            state,
+            index,
+            STARTUP_STATUS_WARN,
+            "Serial console not configured",
+            progress,
+            userdata
+        );
+
+        return;
+    }
+
+    /*
+     * Enumerate currently-present serial devices and
+     * look for the exact persisted device path.
+     */
+    if (
+        serial_enumerate(
+            devices,
+            SERIAL_MAX_DEVICES,
+            &device_count
+        ) != 0
+    ) {
+        startup_finish_check(
+            state,
+            index,
+            STARTUP_STATUS_WARN,
+            "Unable to enumerate serial devices",
+            progress,
+            userdata
+        );
+
+        return;
+    }
+
+    for (int i = 0; i < device_count; i++) {
+        if (
+            strcmp(
+                devices[i].path,
+                config.device
+            ) == 0
+        ) {
+            configured_available =
+                devices[i].available;
+
+            break;
+        }
+    }
+
+    if (!configured_available) {
+        snprintf(
+            message,
+            sizeof(message),
+            "Configured device unavailable: %.80s",
+            config.device
+        );
+
+        startup_finish_check(
+            state,
+            index,
+            STARTUP_STATUS_WARN,
+            message,
+            progress,
+            userdata
+        );
+
+        return;
+    }
+
+    snprintf(
+        message,
+        sizeof(message),
+        "%.96s @ %d",
+        config.device,
+        config.baud
+    );
+
+    startup_finish_check(
+        state,
+        index,
+        STARTUP_STATUS_OK,
+        message,
+        progress,
+        userdata
+    );
+}
+
 void startup_run_checks(
     StartupState *state,
     StartupProgressFn progress,
@@ -579,6 +740,12 @@ void startup_run_checks(
     );
 
     check_node_configuration(
+        state,
+        progress,
+        userdata
+    );
+
+    check_serial_console(
         state,
         progress,
         userdata
